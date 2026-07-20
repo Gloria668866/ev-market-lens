@@ -1,0 +1,53 @@
+erDiagram
+    dim_brand  ||--o{ dim_series : "1:N"
+    dim_series ||--o{ fact_sales_rank : ""
+    dim_series ||--o{ fact_price : ""
+    dim_series ||--o{ fact_review : ""
+    dim_date   ||--o{ fact_sales_rank : ""
+    dim_date   ||--o{ fact_price : ""
+    dim_date   ||--o{ fact_review : ""
+    dim_brand {
+        int brand_id PK
+        string brand_name
+        int sub_brand_id
+        string country_type "enrich"
+    }
+    dim_series {
+        int series_id PK
+        string series_name
+        int brand_id FK
+        string segment "级别,enrich"
+        string powertrain "动力,enrich"
+        num guide_price_min
+        num guide_price_max
+    }
+    dim_date {
+        int date_id PK "YYYYMM"
+        int year
+        int month
+        int quarter
+    }
+    fact_sales_rank {
+        bigint id PK
+        int series_id FK
+        int date_id FK
+        int new_energy_type "0全部1纯电2插混3增程"
+        int rank
+        int last_rank
+        int volume "销量"
+    }
+    fact_price {
+        bigint id PK
+        int series_id FK
+        num guide_price_min
+        num guide_price_max
+        string dealer_price_text
+        num descender_price
+    }
+    fact_review {
+        bigint id PK
+        int series_id FK
+        int review_count
+        num score "口碑接口补"
+        string sentiment "情感"
+    }

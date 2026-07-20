@@ -1,0 +1,45 @@
+erDiagram
+    conversation ||--o{ message : "1:N"
+    kb_document  ||--o{ kb_chunk : "1:N"
+    conversation {
+        bigint conv_id PK
+        bigint user_id
+        string title "首问题摘要"
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at "软删除"
+    }
+    message {
+        bigint msg_id PK
+        bigint conv_id FK
+        string role "user/assistant"
+        text content
+        string intent "sql/rag/hybrid/clarify"
+        text sql_text "生成的SQL,可回溯"
+        json chart_spec "ECharts规格"
+        json citations "RAG引用"
+        json result_meta "行数/耗时/重试次数"
+        timestamp created_at
+    }
+    kb_document {
+        bigint doc_id PK
+        bigint user_id
+        string filename
+        string file_type "pdf/docx/html"
+        string source_uri "MinIO对象路径"
+        string title
+        string status "parsing/ready/failed"
+        int chunk_count
+        timestamp created_at
+        timestamp deleted_at "软删除"
+    }
+    kb_chunk {
+        bigint chunk_id PK
+        bigint doc_id FK
+        int chunk_index
+        text content
+        vector embedding "BGE-large-zh 1024维"
+        int page_no "来源页码"
+        int token_count
+        timestamp created_at
+    }

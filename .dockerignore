@@ -1,0 +1,20 @@
+# 构建镜像时排除大文件/无关物，加速并缩小构建上下文
+.git
+.venv
+.venv-scrapling
+**/__pycache__
+*.db
+data/raw/
+data/rag_corpus/
+data/rag_samples/
+data/rag_eval/
+models/
+frontend/node_modules
+frontend/dist
+node_modules
+backups/
+*.docx
+docs/
+.env
+.env.prod
+*.log

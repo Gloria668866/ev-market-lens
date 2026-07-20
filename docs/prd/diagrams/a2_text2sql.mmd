@@ -1,0 +1,17 @@
+flowchart TB
+    Q[用户问题] --> SL[Schema Linking<br/>选相关表/列]
+    SL --> GEN[LLM 生成 SQL]
+    GEN --> GUARD{SQL 安全护栏<br/>仅放行单条 SELECT}
+    GUARD -->|拦截| REJ[拒绝/重写]
+    REJ --> GEN
+    GUARD -->|放行| EXEC[只读执行]
+    EXEC --> CHK{执行成功?}
+    CHK -->|报错/空结果| FIX[把错误回填<br/>LLM 自校验修正]
+    FIX --> GEN
+    CHK -->|成功| RES[结果集]
+    RES --> CARD{重试次数<br/>≤ MAX_RETRY?}
+    classDef q fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef p fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef g fill:#FCE8E6,stroke:#EA4335,color:#000;
+    classDef ok fill:#E6F4EA,stroke:#34A853,color:#000;
+    class Q q; class SL,GEN,FIX p; class GUARD,REJ,CHK,CARD g; class EXEC,RES ok;

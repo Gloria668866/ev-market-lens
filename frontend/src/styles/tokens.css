@@ -1,0 +1,117 @@
+/* ============================================================
+   车市镜 · 设计令牌（Design Tokens）—— 干净亮色 SaaS
+   定位：新能源车市情报 · 双脑 Agent 终端（Linear/Vercel 血统）
+   原则：大留白 · 1px 发丝线 · 车速红单点强调 · 等宽元数据签名
+
+   结构：先定「新语义令牌」(canonical) → 再把历史命名 alias 过去，
+        旧组件（用 --tx-0 / --brand / --bg-1 …）零改动即跟随新配色，
+        新组件用更语义化的 --ink / --accent / --line。两套指向同一真值。
+   ============================================================ */
+:root {
+  /* —— 强调色：车速红（唯一强调，只用于 CTA / 高亮 / 品牌）—— */
+  --accent:        #dc2626;
+  --accent-press:  #b91c1c;
+  --accent-wash:   #fef2f2;                 /* 极浅红底（hover/选中区） */
+  --accent-wash-2: rgba(220, 38, 38, .08);  /* 半透红，叠在任意底上 */
+  --accent-border: rgba(220, 38, 38, .22);
+
+  /* —— 数据蓝（图表 / 数据脑标识 / 中性信息）—— */
+  --info:          #2563eb;
+  --info-strong:   #1d4ed8;
+  --info-light:    #3b82f6;
+  --info-wash:     #eff6ff;
+
+  /* —— 涨跌（西式：绿涨红跌）—— */
+  --up:            #16a34a;
+  --up-wash:       #f0fdf4;
+  --down:          #dc2626;
+  --down-wash:     #fef2f2;
+  --flat:          #8a8a93;
+
+  /* —— 墨色文字（四级）—— */
+  --ink:           #18181b;   /* 主文字 / 标题 */
+  --ink-2:         #52525b;   /* 次要文字 */
+  --ink-3:         #8a8a93;   /* 弱化 / 标签 */
+  --ink-4:         #b6b6bf;   /* 最弱 / 占位 / 分隔符 */
+
+  /* —— 表面（三级 + 沉降）—— */
+  --bg:            #ffffff;   /* 卡片 / 浮层 */
+  --bg-subtle:     #fafafa;   /* 应用画布底 */
+  --bg-sunken:     #f3f3f5;   /* 输入框 / 分段控件 / 内陷区 */
+  --bg-sunken-2:   #e9e9ec;   /* 更深的内陷 */
+
+  /* —— 发丝线 —— */
+  --line:          #ececef;
+  --line-strong:   #dcdce0;
+  --line-soft:     #f3f3f5;
+
+  /* —— 圆角（SaaS 柔和但克制）—— */
+  --r-sm:          8px;
+  --r-md:          12px;
+  --r-lg:          16px;
+  --r-xl:          22px;
+
+  /* —— 阴影（低透明度分层，仅浮层 / 抬升）—— */
+  --sh-sm:  0 1px 2px rgba(17, 17, 17, .05);
+  --sh-md:  0 6px 20px -6px rgba(17, 17, 17, .10), 0 2px 6px -2px rgba(17, 17, 17, .05);
+  --sh-lg:  0 24px 56px -20px rgba(17, 17, 17, .20), 0 8px 20px -10px rgba(17, 17, 17, .08);
+
+  /* —— 间距 —— */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+
+  /* —— 字体 —— */
+  --font-display: "Geist", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-body:    "Geist", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono:    "Geist Mono", ui-monospace, "JetBrains Mono", Consolas, monospace;
+
+  /* —— 布局 —— */
+  --sidebar-w:   264px;
+  --maxw-thread: 768px;   /* 对话流最大宽 */
+  --maxw-center: 880px;   /* 命令中心最大宽 */
+
+  /* ==========================================================
+     历史命名兼容层（legacy aliases）—— 指向上面的新真值。
+     旧组件不改一行 CSS 即跟随新设计；逐步重写后可清理。
+     ========================================================== */
+  --brand:         var(--accent);
+  --brand-dim:     var(--accent-press);
+  --brand-bg:      var(--accent-wash-2);
+  --brand-border:  var(--accent-border);
+
+  --data:          var(--info);
+  --data-light:    var(--info-light);
+  --data-dim:      var(--info-strong);
+  --data-bg:       var(--info-wash);
+
+  --tx-0:          var(--ink);
+  --tx-1:          var(--ink-2);
+  --tx-2:          var(--ink-3);
+  --tx-3:          var(--ink-4);
+
+  --bg-root:       var(--bg-subtle);
+  --bg-root-2:     var(--bg-sunken);
+  --bg-1:          var(--bg);
+  --bg-1-2:        var(--bg-subtle);
+  --bg-2:          var(--bg-sunken);
+  --bg-3:          var(--bg-sunken-2);
+
+  --border:        var(--line);
+  --border-strong: var(--line-strong);
+  --border-soft:   var(--line-soft);
+
+  --err:           var(--down);
+  --err-soft:      var(--down-wash);
+
+  --radius-sm:     var(--r-sm);
+  --radius-md:     var(--r-md);
+  --radius-lg:     var(--r-lg);
+
+  --shadow-sm:     var(--sh-sm);
+  --shadow-md:     var(--sh-md);
+  --shadow-lg:     var(--sh-lg);
+}

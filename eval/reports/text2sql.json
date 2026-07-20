@@ -1,0 +1,611 @@
+{
+  "n": 60,
+  "max_retry": 2,
+  "first_pass_accuracy": 0.7667,
+  "exec_accuracy": 0.7833,
+  "retry_gain": 0.0167,
+  "first_correct": 46,
+  "final_correct": 47,
+  "rows": [
+    {
+      "id": "sql-001",
+      "q": "2025年纯电销量前十的车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC LIMIT 10",
+      "error": null
+    },
+    {
+      "id": "sql-002",
+      "q": "小米SU7一共卖了多少辆",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米SU7%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-003",
+      "q": "理想L6和理想L7谁卖得多",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%理想L6%' OR s.series_name LIKE '%理想L7%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-004",
+      "q": "2025年增程车型销量最高的5款",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 5",
+      "error": null
+    },
+    {
+      "id": "sql-005",
+      "q": "Model Y累计销量是多少",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%Model Y%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-006",
+      "q": "2025年插混销量排名前十的车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 2 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC LIMIT 10",
+      "error": null
+    },
+    {
+      "id": "sql-007",
+      "q": "比亚迪2025年各车系累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-008",
+      "q": "哪个品牌2025年新能源累计销量最高",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "error": null
+    },
+    {
+      "id": "sql-009",
+      "q": "2025年5月销量第一的车系",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND d.month = 5\nGROUP BY s.series_id, s.series_name\nORDER BY SUM(f.volume) DESC\nLIMIT 1",
+      "error": null
+    },
+    {
+      "id": "sql-010",
+      "q": "2025年纯电总销量是多少",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-011",
+      "q": "星愿2025年每个月的销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT d.ym AS month, SUM(f.volume) AS volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%星愿%' AND d.year = 2025\nGROUP BY d.date_id, d.ym\nORDER BY d.date_id\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-012",
+      "q": "五菱宏光MINIEV累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%五菱宏光MINIEV%'\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-013",
+      "q": "2025年销量超过30万辆的纯电车系有哪些",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 1\nGROUP BY s.series_id, s.series_name\nHAVING SUM(f.volume) > 300000\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-014",
+      "q": "理想汽车全系2025年累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%理想汽车%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-015",
+      "q": "2026年1月纯电销量前五",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 5",
+      "error": null
+    },
+    {
+      "id": "sql-016",
+      "q": "蔚来各车系累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%蔚来%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-017",
+      "q": "2025年12月所有车系总销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-018",
+      "q": "秦PLUS DM累计销量多少",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%秦PLUS DM%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-019",
+      "q": "2025年增程总销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-020",
+      "q": "小鹏MONA M03累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小鹏MONA M03%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-021",
+      "q": "2025年各动力类型的总销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.powertrain, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY s.powertrain\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-022",
+      "q": "指导价低于15万的纯电车系有多少个",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT COUNT(*) FROM dim_series WHERE guide_price_min < 15 AND powertrain = '纯电'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-023",
+      "q": "2025年销量前三的车系分别卖了多少",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 3",
+      "error": null
+    },
+    {
+      "id": "sql-024",
+      "q": "海鸥2025年累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%海鸥%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-025",
+      "q": "比亚迪和吉利银河谁2025年新能源销量更高",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\n  AND (b.brand_name LIKE '%比亚迪%' OR b.brand_name LIKE '%吉利银河%')\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-026",
+      "q": "2025年第一季度纯电销量前十",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025 AND d.quarter = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 10",
+      "error": null
+    },
+    {
+      "id": "sql-027",
+      "q": "元PLUS累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON f.series_id = s.series_id WHERE s.series_name LIKE '%元PLUS%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-028",
+      "q": "2025年插混总销量是多少",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 2 AND d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-029",
+      "q": "上市榜单中销量过20万的车系有几个（2025）",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT COUNT(*) FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id HAVING SUM(f.volume) >= 200000) t\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-030",
+      "q": "小米SU7和Model Y谁卖得多",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米SU7%' OR s.series_name LIKE '%Model Y%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-031",
+      "q": "理想汽车有哪几个车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name\nFROM dim_series s\nJOIN dim_brand b ON s.brand_id = b.brand_id\nWHERE b.brand_name LIKE '%理想汽车%'\nORDER BY s.series_name\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-032",
+      "q": "2025年纯电销量最低的5款车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume ASC\nLIMIT 5",
+      "error": null
+    },
+    {
+      "id": "sql-033",
+      "q": "汉DM累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS cumulative_volume FROM fact_sales_rank f JOIN dim_series s ON f.series_id = s.series_id WHERE s.series_name LIKE '%汉DM%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-034",
+      "q": "2024年和2025年纯电总销量对比",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT d.year, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year IN (2024, 2025)\nGROUP BY d.year\nORDER BY d.year\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-035",
+      "q": "销量榜上有多少个不同车系（2025）",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT COUNT(DISTINCT f.series_id) AS distinct_series_count\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-036",
+      "q": "AION Y累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%AION Y%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-037",
+      "q": "2025年6月纯电销量前十",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, f.volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202506 AND f.new_energy_type = 1\nORDER BY f.volume DESC\nLIMIT 10",
+      "error": null
+    },
+    {
+      "id": "sql-038",
+      "q": "宋Pro DM累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%宋Pro DM%'\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-039",
+      "q": "2025年增程车系有哪些上过榜",
+      "first_match": false,
+      "final_match": true,
+      "attempts": 2,
+      "exec_ok": true,
+      "pred_sql": "SELECT DISTINCT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-040",
+      "q": "五菱汽车2025年累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%五菱%' AND d.year = 2025\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-041",
+      "q": "2025年12月销量前五的车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, f.volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512\nORDER BY f.volume DESC\nLIMIT 5",
+      "error": null
+    },
+    {
+      "id": "sql-042",
+      "q": "指导价30万以上的车系有多少个",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT COUNT(DISTINCT series_id) AS series_count FROM dim_series WHERE guide_price_min >= 30\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-043",
+      "q": "海豚累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%海豚%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-044",
+      "q": "2025年纯电车系平均累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT AVG(total_volume) AS avg_cumulative_volume FROM (SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY f.series_id) t\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-045",
+      "q": "极氪各车系累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%极氪%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-046",
+      "q": "2025年销量最高的插混车系是哪个",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 2\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "error": null
+    },
+    {
+      "id": "sql-047",
+      "q": "Model 3累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%Model 3%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-048",
+      "q": "2025年每月纯电总销量趋势",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT d.ym AS month, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY d.ym\nORDER BY d.ym\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-049",
+      "q": "小米YU7累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米YU7%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-050",
+      "q": "2025年纯电销量排名第11到20的车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 10 OFFSET 10",
+      "error": null
+    },
+    {
+      "id": "sql-051",
+      "q": "银河E5累计销量",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%银河E5%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-052",
+      "q": "2025年纯电、插混、增程各有多少款车系上榜",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT f.new_energy_type, COUNT(DISTINCT f.series_id) AS series_count\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY f.new_energy_type\nORDER BY f.new_energy_type\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-053",
+      "q": "腾势各车系累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%腾势%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-054",
+      "q": "2026年1到3月纯电总销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month BETWEEN 1 AND 3\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-055",
+      "q": "理想L6 2025年每月销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT d.ym, SUM(f.volume) AS monthly_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%理想L6%' AND d.year = 2025\nGROUP BY d.ym\nORDER BY d.ym\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-056",
+      "q": "2025年销量前十里有几款是增程",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT COUNT(DISTINCT f.series_id) AS count\nFROM fact_sales_rank f\nWHERE f.series_id IN (\n  SELECT fs.series_id\n  FROM fact_sales_rank fs\n  JOIN dim_date d ON fs.date_id = d.date_id\n  WHERE d.year = 2025\n  GROUP BY fs.series_id\n  ORDER BY SUM(fs.volume) DESC\n  LIMIT 10\n)\nAND f.new_energy_type = 3",
+      "error": null
+    },
+    {
+      "id": "sql-057",
+      "q": "唐DM累计销量",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%唐DM%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-058",
+      "q": "2025年比亚迪销量最高的车系",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "error": null
+    },
+    {
+      "id": "sql-059",
+      "q": "2025年纯电销量总和与插混销量总和",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT SUM(CASE WHEN f.new_energy_type = 1 THEN f.volume ELSE 0 END) AS 纯电销量总和, SUM(CASE WHEN f.new_energy_type = 2 THEN f.volume ELSE 0 END) AS 插混销量总和 FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-060",
+      "q": "2025年12月排名上升的车系有哪些（当月排名优于上期）",
+      "first_match": false,
+      "final_match": false,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512 AND f.rank < f.last_rank\nORDER BY s.series_name\nLIMIT 200",
+      "error": null
+    }
+  ]
+}

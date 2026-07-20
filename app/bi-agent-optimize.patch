@@ -1,0 +1,648 @@
+diff --git a/app/llm.py b/app/llm.py
+index b0f3092..d434989 100644
+--- a/app/llm.py
++++ b/app/llm.py
+@@ -1,14 +1,33 @@
+ """LLM 客户端：用 OpenAI 兼容协议，同时支持通义千问 Qwen 与 DeepSeek。
+ 切换模型只需改 .env，不改代码。"""
++import os
++
+ from openai import OpenAI
+ from .config import LLM_BASE_URL, LLM_MODEL, LLM_API_KEY
+ 
+-_client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
++# 稳定性关键：上游 LLM 偶发挂起时，无超时 = 整个 /api/ask 永久转圈、连接被一直占着。
++# timeout 让请求最多等 LLM_TIMEOUT 秒；max_retries 处理偶发网络抖动（指数退避）。
++LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))
++LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
++
++# 惰性构造：OpenAI() 在 key 为空时构造即抛异常 → 原来没配 .env 连 import 都崩、/health 都起不来。
++# 改为首次调用时才建客户端：服务能正常启动，只有真正用到 LLM 时才报清晰错误。
++_client = None
++
++
++def _get_client() -> OpenAI:
++    global _client
++    if _client is None:
++        if not LLM_API_KEY:
++            raise RuntimeError("LLM_API_KEY 未配置：请在 .env 中设置（参考 README 环境变量一节）")
++        _client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
++                         timeout=LLM_TIMEOUT, max_retries=LLM_MAX_RETRIES)
++    return _client
+ 
+ 
+ def chat(messages, temperature: float = 0.0, **kw) -> str:
+     """同步对话，返回文本。Text2SQL 等确定性任务用 temperature=0。"""
+-    resp = _client.chat.completions.create(
++    resp = _get_client().chat.completions.create(
+         model=LLM_MODEL, messages=messages, temperature=temperature, **kw
+     )
+     return resp.choices[0].message.content or ""
+@@ -16,7 +35,7 @@ def chat(messages, temperature: float = 0.0, **kw) -> str:
+ 
+ def chat_stream(messages, temperature: float = 0.3, **kw):
+     """流式对话，逐 token 产出（供洞察生成的 SSE 输出）。"""
+-    stream = _client.chat.completions.create(
++    stream = _get_client().chat.completions.create(
+         model=LLM_MODEL, messages=messages, temperature=temperature, stream=True, **kw
+     )
+     for chunk in stream:
+diff --git a/app/main.py b/app/main.py
+index 8bd2e7c..feb73fa 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -12,6 +12,7 @@
+ """
+ import asyncio
+ import json
++import logging
+ 
+ from fastapi import FastAPI, Depends, HTTPException
+ from fastapi.middleware.cors import CORSMiddleware
+@@ -25,7 +26,10 @@ from .auth import router as auth_router, get_current_user
+ from .database import get_db, init_db
+ from .models import User, Conversation, Message
+ 
+-from .config import CORS_ALLOW_ORIGINS
++from .config import CORS_ALLOW_ORIGINS, JWT_SECRET
++
++logger = logging.getLogger("cheshijing")
++logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+ 
+ app = FastAPI(title="车市镜 · 新能源车市情报 Agent")
+ # CORS：dev 默认放行全部；生产用 CORS_ALLOW_ORIGINS 收紧到正式域名（§17/§18）。
+@@ -45,6 +49,9 @@ except Exception as _e:  # noqa: BLE001
+ @app.on_event("startup")
+ def _startup():
+     init_db()  # 幂等建应用层表（users/conversation/message/kb_document）
++    # 安全自检：JWT 弱密钥在生产环境是致命的（任何人可伪造任意用户 token）。
++    if JWT_SECRET == "dev-insecure-change-me":
++        logger.warning("JWT_SECRET 仍是默认弱密钥！上线/演示前务必在 .env 设置随机强密钥（如 openssl rand -hex 32）")
+ 
+ 
+ class Ask(BaseModel):
+@@ -119,16 +126,20 @@ def _insight_pieces(text: str, n: int = 24):
+ 
+ @app.post("/api/ask")
+ async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+-    """SSE（§9.1）：intent → [sql] → [rows] → [chart] → insight(逐段 delta) → [citation...] → done。
++    """SSE（§9.1）：stage(accepted) → intent → [sql] → [rows] → [chart] → insight(逐段 delta) → [citation...] → done。
+     纯 RAG 无 sql/rows/chart，只有 insight(答案)+citation；出错推 error。"""
+     async def gen():
++        # 体验关键：agent 整体跑完才有第一个业务事件，期间用户毫无反馈。
++        # 先推一个 stage 事件，前端立刻把「已接收，分析中」亮起来（旧前端不识别会安全忽略）。
++        yield {"event": "stage", "data": json.dumps(
++            {"stage": "accepted", "message": "已接收，正在分析问题…"}, ensure_ascii=False)}
+         try:
+             # 图是同步阻塞，丢线程池跑，避免堵事件循环
+             state = await asyncio.to_thread(run_agent, body.question, user.id, [])
+         except Exception as e:  # noqa: BLE001
+             yield {"event": "error", "data": json.dumps(
+                 {"code": "AGENT_ERROR", "message": "处理失败，请换种问法或缩小范围。"}, ensure_ascii=False)}
+-            print(f"[ask] run_agent 失败: {e}")
++            logger.exception(f"[ask] run_agent 失败 user={user.id} q={body.question[:80]!r}: {e}")
+             return
+ 
+         conv_id, msg_id = _persist(db, user, body.question, state, body.conversation_id)
+@@ -157,7 +168,7 @@ async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = D
+             {"msg_id": msg_id, "conversation_id": conv_id, "has_answer": state.get("has_answer", True)},
+             ensure_ascii=False)}
+ 
+-    return EventSourceResponse(gen())
++    return EventSourceResponse(gen(), ping=15)
+ 
+ 
+ # ---------------------------------------------------------------- 历史会话
+diff --git a/frontend/src/App.vue b/frontend/src/App.vue
+index b7166b9..621132e 100644
+--- a/frontend/src/App.vue
++++ b/frontend/src/App.vue
+@@ -1,5 +1,5 @@
+ <script setup>
+-import { ref } from 'vue'
++import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+ import Sidebar from './components/Sidebar.vue'
+ import TopBar from './components/TopBar.vue'
+ import EmptyState from './components/EmptyState.vue'
+@@ -13,11 +13,39 @@ import { useAuth } from './composables/useAuth.js'
+ const { isAuthed, state: auth, logout } = useAuth()
+ const { conversations, activeId, messages, sending, newConversation, selectConversation, deleteConversation, send, stop } = useChat()
+ const showKb = ref(false)
++const showSide = ref(false)   // 移动端侧栏抽屉
+ 
+ function onAsk(q) {
+   if (!activeId.value) newConversation()
+   send(q)
+ }
++function onSelect(id) {
++  selectConversation(id)
++  showSide.value = false      // 移动端选完会话自动收起抽屉
++}
++function onNew() {
++  newConversation()
++  showSide.value = false
++}
++
++// 最后一条用户提问 → Composer 按 ↑ 回填（类终端 history）
++const lastQuestion = computed(() => {
++  const list = messages.value
++  for (let i = list.length - 1; i >= 0; i--) {
++    if (list[i].role === 'user') return list[i].content
++  }
++  return ''
++})
++
++// 全局快捷键：Cmd/Ctrl + K 新建对话（重度用户肌肉记忆）
++function onHotkey(e) {
++  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
++    e.preventDefault()
++    if (isAuthed.value && !sending.value) newConversation()
++  }
++}
++onMounted(() => window.addEventListener('keydown', onHotkey))
++onBeforeUnmount(() => window.removeEventListener('keydown', onHotkey))
+ </script>
+ 
+ <template>
+@@ -26,15 +54,20 @@ function onAsk(q) {
+ 
+   <div v-else class="app">
+     <Sidebar
++      :class="{ 'side-open': showSide }"
+       :conversations="conversations" :activeId="activeId" :user="auth.user"
+-      @new="newConversation" @select="selectConversation" @delete="deleteConversation" @open-kb="showKb = true" />
++      @new="onNew" @select="onSelect" @delete="deleteConversation" @open-kb="showKb = true" />
++    <div v-if="showSide" class="side-mask" @click="showSide = false"></div>
+ 
+     <main class="main">
++      <button class="burger" aria-label="打开会话列表" @click="showSide = true">
++        <span></span><span></span><span></span>
++      </button>
+       <TopBar :user="auth.user" @logout="logout" />
+       <div class="stage">
+         <EmptyState v-if="!messages.length" @ask="onAsk" />
+         <MessageList v-else :messages="messages" @ask="onAsk" />
+-        <Composer :sending="sending" @send="onAsk" @stop="stop" />
++        <Composer :sending="sending" :lastQuestion="lastQuestion" @send="onAsk" @stop="stop" />
+       </div>
+     </main>
+ 
+@@ -44,10 +77,31 @@ function onAsk(q) {
+ 
+ <style scoped>
+ .app { display: flex; height: 100%; }
+-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
++.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+ .stage { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+ 
++.burger { display: none; }
++.side-mask { display: none; }
++
++/* 移动端：侧栏改为抽屉（之前是直接 display:none，历史会话/知识库完全不可达） */
+ @media (max-width: 760px) {
+-  .app :deep(.sidebar) { display: none; }
++  .app :deep(.sidebar) {
++    position: fixed; left: 0; top: 0; bottom: 0; z-index: 60;
++    transform: translateX(-100%); transition: transform .22s ease;
++    box-shadow: 8px 0 30px rgba(0,0,0,.35);
++  }
++  .app :deep(.sidebar.side-open) { transform: translateX(0); }
++  .side-mask {
++    display: block; position: fixed; inset: 0; z-index: 50;
++    background: rgba(8,12,20,.5); animation: fadeIn .18s ease;
++  }
++  .burger {
++    display: flex; flex-direction: column; justify-content: center; gap: 4px;
++    position: absolute; left: 14px; top: 14px; z-index: 30;
++    width: 32px; height: 30px; padding: 0 7px; border-radius: var(--r-sm);
++    background: var(--panel); border: 1px solid var(--line);
++  }
++  .burger span { height: 1.6px; background: var(--tx-700); border-radius: 2px; }
++  .main :deep(.topbar) { padding-left: 58px; }
+ }
+ </style>
+diff --git a/frontend/src/api/events.js b/frontend/src/api/events.js
+index 23f5532..2bddc78 100644
+--- a/frontend/src/api/events.js
++++ b/frontend/src/api/events.js
+@@ -33,6 +33,10 @@ export function normalizeEvent(event, raw) {
+   const o = (d && typeof d === 'object') ? d : {}
+ 
+   switch (name) {
++    case 'stage':
++      // 后端在 agent 起跑前立即推送（即时反馈）；旧后端没有此事件，不影响兼容
++      return { type: 'stage', stage: o.stage || '', message: o.message || '' }
++
+     case 'intent':
+       return { type: 'intent', intent: o.intent || 'sql', confidence: o.confidence ?? null, conversationId: o.conversation_id ?? null }
+ 
+diff --git a/frontend/src/components/AssistantMessage.vue b/frontend/src/components/AssistantMessage.vue
+index 8c30e3a..f8f295d 100644
+--- a/frontend/src/components/AssistantMessage.vue
++++ b/frontend/src/components/AssistantMessage.vue
+@@ -25,6 +25,7 @@ const FALLBACK_QS = ['2025年纯电销量Top10', '理想和小米SU7谁卖得多
+         <div class="err-title">没太理解这个问题</div>
+         <p class="err-sub">{{ msg.error?.message || '换一种问法试试，或点下面的示例问题：' }}</p>
+         <div class="chips">
++          <button v-if="msg.question" class="retry" @click="emit('ask', msg.question)">↻ 重试该问题</button>
+           <button v-for="q in FALLBACK_QS" :key="q" @click="emit('ask', q)">{{ q }}</button>
+         </div>
+       </div>
+@@ -66,4 +67,6 @@ const FALLBACK_QS = ['2025年纯电销量Top10', '理想和小米SU7谁卖得多
+ .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+ .chips button { font-size: 12.5px; color: var(--ink-800); background: var(--sql-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 15px; transition: background .12s, border-color .12s; }
+ .chips button:hover { background: var(--jade-50); border-color: var(--jade-300); }
++.chips .retry { background: var(--jade-600); color: #fff; border-color: var(--jade-600); font-weight: 700; }
++.chips .retry:hover { background: var(--jade-700); border-color: var(--jade-700); }
+ </style>
+diff --git a/frontend/src/components/ChartCard.vue b/frontend/src/components/ChartCard.vue
+index 827b887..66f30dc 100644
+--- a/frontend/src/components/ChartCard.vue
++++ b/frontend/src/components/ChartCard.vue
+@@ -35,6 +35,12 @@ onBeforeUnmount(() => {
+   chart.value?.dispose()
+ })
+ watch(() => props.option, render, { deep: true })
++
++// 供父组件「下载图表 PNG」：导出当前画布（2x 像素密度，白底）
++function getDataURL() {
++  return chart.value?.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' }) || null
++}
++defineExpose({ getDataURL })
+ </script>
+ 
+ <template>
+diff --git a/frontend/src/components/Composer.vue b/frontend/src/components/Composer.vue
+index 8d4adeb..e3f0724 100644
+--- a/frontend/src/components/Composer.vue
++++ b/frontend/src/components/Composer.vue
+@@ -2,7 +2,10 @@
+ // 输入区：自适应高度文本框 + 发送/停止。Enter 发送，Shift+Enter 换行。
+ import { ref, nextTick, watch } from 'vue'
+ 
+-const props = defineProps({ sending: { type: Boolean, default: false } })
++const props = defineProps({
++  sending: { type: Boolean, default: false },
++  lastQuestion: { type: String, default: '' },   // 重度用户：空输入框按 ↑ 调回上一条提问改着发
++})
+ const emit = defineEmits(['send', 'stop'])
+ 
+ const text = ref('')
+@@ -27,6 +30,17 @@ function onKey(e) {
+   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+     e.preventDefault()
+     submit()
++    return
++  }
++  // 空输入框按 ↑：回填上一条提问（类终端 history），光标移到末尾方便就地修改
++  if (e.key === 'ArrowUp' && !text.value && props.lastQuestion) {
++    e.preventDefault()
++    text.value = props.lastQuestion
++    nextTick(() => {
++      resize()
++      const el = ta.value
++      if (el) el.setSelectionRange(el.value.length, el.value.length)
++    })
+   }
+ }
+ </script>
+diff --git a/frontend/src/components/DataResultCard.vue b/frontend/src/components/DataResultCard.vue
+index d28d58b..915441e 100644
+--- a/frontend/src/components/DataResultCard.vue
++++ b/frontend/src/components/DataResultCard.vue
+@@ -4,12 +4,31 @@
+ import { ref, computed, watch } from 'vue'
+ import ChartCard from './ChartCard.vue'
+ import { normalizeChartSpec, buildOptionByType, TYPE_LABEL } from '@/utils/chart.js'
++import { toCSV, downloadFile, downloadDataURL, copyText, exportName } from '@/utils/export.js'
+ 
+ const props = defineProps({
+   msg: { type: Object, required: true },
+   streaming: { type: Boolean, default: false },
+ })
+ 
++const chartRef = ref(null)
++const copied = ref(false)
++
++// —— 重度用户三件套：导出 CSV / 下载图表 PNG / 复制结论 —— //
++function exportCSV() {
++  downloadFile(exportName('车市镜数据', 'csv'), toCSV(props.msg.columns, props.msg.rows), 'text/csv;charset=utf-8')
++}
++function exportPNG() {
++  const url = chartRef.value?.getDataURL()
++  if (url) downloadDataURL(exportName('车市镜图表', 'png'), url)
++}
++async function copyInsight() {
++  if (await copyText(props.msg.insight || '')) {
++    copied.value = true
++    setTimeout(() => { copied.value = false }, 1500)
++  }
++}
++
+ const hasData = computed(() => props.msg.rows?.length > 0 && props.msg.columns?.length > 0)
+ // 后端图表描述符 → 维度/度量/默认图型/可切图型集合
+ const spec = computed(() => hasData.value
+@@ -38,12 +57,27 @@ const option = computed(() =>
+           <button v-for="t in types" :key="t.key"
+             :class="{ on: type === t.key }" @click="type = t.key">{{ t.label }}</button>
+         </div>
++        <div class="tools">
++          <button class="tool" title="下载图表 PNG" @click="exportPNG">
++            <svg viewBox="0 0 20 20" width="14" height="14"><path d="M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 16h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
++            图
++          </button>
++          <button class="tool" title="导出数据 CSV" @click="exportCSV">
++            <svg viewBox="0 0 20 20" width="14" height="14"><path d="M4 4h12v12H4z M4 8.5h12 M8.5 4v12" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
++            CSV
++          </button>
++        </div>
+       </div>
+-      <ChartCard :option="option" />
++      <ChartCard ref="chartRef" :option="option" />
+     </div>
+ 
+     <div v-if="msg.insight || streaming" class="insight">
+-      <div class="insight-head">结论与归因</div>
++      <div class="insight-head">
++        结论与归因
++        <button class="copy" :class="{ ok: copied }" :title="copied ? '已复制' : '复制结论'" @click="copyInsight">
++          {{ copied ? '✓ 已复制' : '复制' }}
++        </button>
++      </div>
+       <div class="insight-body">
+         <span class="text">{{ msg.insight }}</span><span v-if="streaming" class="cursor"></span>
+       </div>
+@@ -66,6 +100,25 @@ const option = computed(() =>
+ 
+ /* 分段图型切换 */
+ .switch { margin-left: auto; display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; }
++
++/* 导出工具：图 PNG / 数据 CSV。无切换器时自己靠右，有则贴在切换器右侧 */
++.tools { display: inline-flex; gap: 6px; margin-left: auto; }
++.switch ~ .tools { margin-left: 0; }
++.tool {
++  display: inline-flex; align-items: center; gap: 5px;
++  font-size: 11.5px; font-weight: 600; color: var(--tx-500);
++  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
++  background: var(--panel-2); transition: color .12s, border-color .12s;
++}
++.tool:hover { color: var(--sql-accent); border-color: var(--sql-accent); }
++
++.insight-head .copy {
++  float: right; font-family: var(--f-sans); font-size: 11px; font-weight: 600;
++  color: var(--tx-500); border: 1px solid var(--line); border-radius: var(--r-pill);
++  padding: 2px 10px; letter-spacing: 0; text-transform: none; transition: color .12s, border-color .12s;
++}
++.insight-head .copy:hover { color: var(--sql-accent); border-color: var(--sql-accent); }
++.insight-head .copy.ok { color: var(--jade-600); border-color: var(--jade-300); }
+ .switch button {
+   font-size: 12px; font-weight: 600; color: var(--tx-500); padding: 5px 12px; border-radius: var(--r-pill);
+   transition: color .15s, background .15s; white-space: nowrap;
+diff --git a/frontend/src/components/KnowledgeAnswer.vue b/frontend/src/components/KnowledgeAnswer.vue
+index 2224ac2..5633ea1 100644
+--- a/frontend/src/components/KnowledgeAnswer.vue
++++ b/frontend/src/components/KnowledgeAnswer.vue
+@@ -2,10 +2,23 @@
+ // 知识问答脑：答案正文 + 来源引用卡（文档名 / 章节 heading_path / 页码，可点击溯源）。
+ // 引用结构对齐后端 §5.5：{doc_id, page_no, chunk_id, heading_path, title}。
+ import { ref } from 'vue'
++import { copyText } from '@/utils/export.js'
+ const props = defineProps({
+   msg: { type: Object, required: true },
+   streaming: { type: Boolean, default: false },
+ })
++const copied = ref(false)
++async function copyAnswer() {
++  // 连同引用一起复制 —— 重度用户常把答案贴进周报/IM，带出处更可信
++  const cites = (props.msg.citations || [])
++    .map((c, i) => `[${i + 1}] 《${c.title || '文档 #' + c.doc_id}》 ${c.heading_path || ''} P${c.page_no}`)
++    .join('\n')
++  const text = (props.msg.insight || '') + (cites ? `\n\n来源：\n${cites}` : '')
++  if (await copyText(text)) {
++    copied.value = true
++    setTimeout(() => { copied.value = false }, 1500)
++  }
++}
+ // 当前展开溯源详情的引用索引（后端暂无文档查看器，点开就地展示出处定位信息）
+ const openIdx = ref(-1)
+ function toggle(i) { openIdx.value = openIdx.value === i ? -1 : i }
+@@ -19,6 +32,9 @@ function pathParts(c) {
+   <div class="answer">
+     <div class="ans-body">
+       <span class="text">{{ msg.insight }}</span><span v-if="streaming" class="cursor"></span>
++      <button v-if="msg.insight && !streaming" class="copy" :class="{ ok: copied }" @click="copyAnswer">
++        {{ copied ? '✓ 已复制（含来源）' : '复制答案' }}
++      </button>
+     </div>
+ 
+     <div v-if="msg.citations && msg.citations.length" class="citations">
+@@ -50,6 +66,13 @@ function pathParts(c) {
+ <style scoped>
+ .answer { display: flex; flex-direction: column; gap: 18px; }
+ .ans-body { font-size: 15px; line-height: 1.85; color: var(--tx-900); white-space: pre-wrap; }
++.ans-body .copy {
++  display: block; margin-top: 10px; font-size: 11.5px; font-weight: 600; color: var(--tx-500);
++  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 12px;
++  transition: color .12s, border-color .12s;
++}
++.ans-body .copy:hover { color: var(--rag-accent); border-color: var(--rag-accent); }
++.ans-body .copy.ok { color: var(--jade-600); border-color: var(--jade-300); }
+ .cursor { display: inline-block; width: 7px; height: 15px; background: var(--rag-accent); margin-left: 2px; vertical-align: -2px; animation: blink 1s step-start infinite; }
+ 
+ .citations { border-top: 1px dashed var(--line-strong); padding-top: 14px; }
+diff --git a/frontend/src/components/Sidebar.vue b/frontend/src/components/Sidebar.vue
+index b38eb2d..390ad1f 100644
+--- a/frontend/src/components/Sidebar.vue
++++ b/frontend/src/components/Sidebar.vue
+@@ -1,13 +1,21 @@
+ <script setup>
+-// 左侧栏：品牌 + 新建对话 + 会话历史 + 知识库入口 + 用户位（上线预留）。
++// 左侧栏：品牌 + 新建对话 + 会话搜索 + 会话历史 + 知识库入口 + 用户位（上线预留）。
++import { ref, computed } from 'vue'
+ import LogoMark from './LogoMark.vue'
+ const props = defineProps({
+   conversations: { type: Array, default: () => [] },
+-  activeId: { type: [String, null], default: null },
++  activeId: { type: [String, Number, null], default: null },
+   user: { type: Object, default: null },
+ })
+ const emit = defineEmits(['new', 'select', 'open-kb', 'delete'])
+ const initial = () => (props.user?.nickname || props.user?.username || 'U').slice(0, 1).toUpperCase()
++
++// 会话搜索（纯前端过滤标题）—— 重度用户积累几十条会话后必需
++const kw = ref('')
++const filtered = computed(() => {
++  const k = kw.value.trim().toLowerCase()
++  return k ? props.conversations.filter((c) => (c.title || '').toLowerCase().includes(k)) : props.conversations
++})
+ </script>
+ 
+ <template>
+@@ -25,10 +33,16 @@ const initial = () => (props.user?.nickname || props.user?.username || 'U').slic
+     </button>
+ 
+     <div class="section-label">会话历史</div>
++    <div class="search" v-if="conversations.length > 5">
++      <svg viewBox="0 0 20 20" width="13" height="13"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="13.5" y1="13.5" x2="17" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
++      <input v-model="kw" type="text" placeholder="搜索会话…" />
++      <button v-if="kw" class="clear" @click="kw = ''">✕</button>
++    </div>
+     <nav class="history">
+       <p v-if="!conversations.length" class="empty-hint">还没有对话<br/><span>问一句开始吧</span></p>
++      <p v-else-if="!filtered.length" class="empty-hint">没有匹配「{{ kw }}」的会话</p>
+       <div
+-        v-for="c in conversations" :key="c.id"
++        v-for="c in filtered" :key="c.id"
+         class="conv" :class="{ active: c.id === activeId }"
+         role="button" tabindex="0"
+         @click="emit('select', c.id)" @keyup.enter="emit('select', c.id)">
+@@ -84,6 +98,20 @@ const initial = () => (props.user?.nickname || props.user?.username || 'U').slic
+   font-size: 10.5px; color: var(--side-tx-dim); letter-spacing: .16em; margin: 20px 10px 8px;
+   font-weight: 700; text-transform: uppercase;
+ }
++.search {
++  display: flex; align-items: center; gap: 7px; margin: 0 2px 8px;
++  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
++  border-radius: var(--r-sm); padding: 6px 10px; color: var(--side-tx-dim);
++  transition: border-color .15s;
++}
++.search:focus-within { border-color: var(--jade-500); }
++.search input {
++  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
++  font-size: 12.5px; color: var(--side-tx);
++}
++.search input::placeholder { color: var(--side-tx-dim); }
++.search .clear { flex: none; font-size: 11px; color: var(--side-tx-dim); padding: 0 2px; }
++.search .clear:hover { color: #fff; }
+ .history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+ .empty-hint { font-size: 13px; color: var(--side-tx-dim); padding: 10px; text-align: center; line-height: 1.7; }
+ .empty-hint span { font-size: 11.5px; opacity: .8; }
+diff --git a/frontend/src/composables/useChat.js b/frontend/src/composables/useChat.js
+index d5fa31f..758fe4c 100644
+--- a/frontend/src/composables/useChat.js
++++ b/frontend/src/composables/useChat.js
+@@ -33,9 +33,10 @@ function makeStages(intent) {
+   ]
+ }
+ 
+-function newAssistant() {
++function newAssistant(question = '') {
+   return reactive({
+     id: uid(), role: 'assistant', status: 'thinking',
++    question,                                     // 原问题：错误时一键重试用
+     intent: null, confidence: null, stages: [],
+     sql: '', columns: [], rows: [],
+     chartPayload: null,
+@@ -155,7 +156,7 @@ export function useChat() {
+     if (conv.messages.length === 0) conv.title = q.length > 20 ? q.slice(0, 20) + '…' : q
+ 
+     conv.messages.push({ id: uid(), role: 'user', content: q })
+-    const msg = newAssistant()
++    const msg = newAssistant(q)
+     conv.messages.push(msg)
+     sending.value = true
+     persist()
+@@ -178,6 +179,12 @@ export function useChat() {
+ 
+   function applyEvent(msg, ev) {
+     switch (ev.type) {
++      case 'stage':
++        // 后端起跑前的即时反馈：intent 未到时先亮一个「分析问题」步骤，避免长时间无响应感
++        if (!msg.stages.length) {
++          msg.stages = [{ key: 'intent', label: ev.message || '分析问题中', status: 'active' }]
++        }
++        break
+       case 'intent':
+         msg.intent = ev.intent; msg.confidence = ev.confidence
+         msg.stages = makeStages(ev.intent); msg.status = 'thinking'; break
+diff --git a/frontend/src/utils/export.js b/frontend/src/utils/export.js
+new file mode 100644
+index 0000000..2229d92
+--- /dev/null
++++ b/frontend/src/utils/export.js
+@@ -0,0 +1,65 @@
++// 导出工具：重度用户高频动作 —— 把结果带走（CSV / PNG / 复制文本）。
++// 不引第三方库，全部用浏览器原生能力。
++
++/** columns + 数组行 → CSV 文本（RFC4180 转义；含 UTF-8 BOM，Excel 直接打开不乱码） */
++export function toCSV(columns, rows) {
++  const esc = (v) => {
++    const s = v == null ? '' : String(v)
++    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
++  }
++  const lines = [columns.map(esc).join(',')]
++  for (const r of rows) lines.push(r.map(esc).join(','))
++  return '\ufeff' + lines.join('\r\n')
++}
++
++/** 触发浏览器下载 */
++export function downloadFile(filename, content, mime = 'text/plain') {
++  const blob = content instanceof Blob ? content : new Blob([content], { type: mime })
++  const url = URL.createObjectURL(blob)
++  const a = document.createElement('a')
++  a.href = url
++  a.download = filename
++  document.body.appendChild(a)
++  a.click()
++  a.remove()
++  URL.revokeObjectURL(url)
++}
++
++/** dataURL（如 ECharts getDataURL 的 PNG）→ 下载 */
++export function downloadDataURL(filename, dataURL) {
++  const a = document.createElement('a')
++  a.href = dataURL
++  a.download = filename
++  document.body.appendChild(a)
++  a.click()
++  a.remove()
++}
++
++/** 复制文本到剪贴板；返回 Promise<boolean>。带 execCommand 兜底（http 演示环境无 clipboard API）。 */
++export async function copyText(text) {
++  try {
++    await navigator.clipboard.writeText(text)
++    return true
++  } catch {
++    try {
++      const ta = document.createElement('textarea')
++      ta.value = text
++      ta.style.position = 'fixed'
++      ta.style.opacity = '0'
++      document.body.appendChild(ta)
++      ta.select()
++      const ok = document.execCommand('copy')
++      ta.remove()
++      return ok
++    } catch {
++      return false
++    }
++  }
++}
++
++/** 用消息标题/时间生成安全文件名 */
++export function exportName(prefix, ext) {
++  const t = new Date()
++  const pad = (n) => String(n).padStart(2, '0')
++  return `${prefix}_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}.${ext}`
++}
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index c3e6914..db386e5 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -12,4 +12,15 @@ export default defineConfig({
+     port: 5173,
+     strictPort: false,
+   },
++  build: {
++    // ECharts 体积大且极少变动 → 拆独立 chunk：首屏只拉业务代码，且发版后 echarts 缓存仍命中
++    rollupOptions: {
++      output: {
++        manualChunks: {
++          echarts: ['echarts/core', 'echarts/charts', 'echarts/components', 'echarts/renderers'],
++          vue: ['vue'],
++        },
++      },
++    },
++  },
+ })

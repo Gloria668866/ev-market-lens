@@ -1,0 +1,167 @@
+# ============================================================
+# 车市镜 · 生产编排（单台 4C8G VPS 一键起全栈）
+# 服务：Caddy(HTTPS边缘) → FastAPI ；Celery worker+beat ；PostgreSQL16+pgvector ；Redis ；MinIO
+# 用法（在 deploy/ 目录，密钥来自仓库根 .env.prod，已 gitignore）：
+#   docker compose --env-file ../.env.prod -f docker-compose.prod.yml up -d --build
+#   docker compose --env-file ../.env.prod -f docker-compose.prod.yml ps
+#   docker compose --env-file ../.env.prod -f docker-compose.prod.yml logs -f api
+# 详见 deploy/DEPLOY.md。本文件不写死任何口令，只引用 ${变量}。
+# ============================================================
+name: carmirror-prod
+
+x-app-env: &app-env            # api/worker/beat 共用的运行时环境
+  env_file: [../.env.prod]
+
+services:
+  # ---------- PostgreSQL 16 + pgvector（分析库 bi + 应用库 app，双角色）----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: carmirror-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPER_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_SUPER_DB:-postgres}
+      APP_DB_NAME: ${APP_DB_NAME}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      BI_DB_NAME: ${BI_DB_NAME}
+      BI_READONLY_USER: ${BI_READONLY_USER}
+      BI_READONLY_PASSWORD: ${BI_READONLY_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"      # 仅本机可连（给一次性数据迁移用，不对公网开放）
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ---------- Redis（Celery broker/backend + 缓存）----------
+  redis:
+    image: redis:7-alpine
+    container_name: carmirror-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # ---------- MinIO 对象存储 ----------
+  minio:
+    image: minio/minio:latest
+    container_name: carmirror-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio-init:                    # 一次性建桶
+    image: minio/mc:latest
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_UPLOADS: ${MINIO_BUCKET_UPLOADS:-kb-uploads}
+      MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-crawl-raw}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_UPLOADS"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_RAW"
+        echo ">> buckets ready"
+    restart: "no"
+
+  # ---------- FastAPI ----------
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    image: carmirror-app:latest      # worker/beat 复用同一镜像
+    container_name: carmirror-api
+    restart: always
+    <<: *app-env
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro     # BGE + reranker 权重（挂载持久化，避免每次重下）
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    expose: ["8000"]                 # 仅内网；公网由 caddy 反代
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------- Celery worker（解析/切块/向量化异步）----------
+  worker:
+    image: carmirror-app:latest
+    container_name: carmirror-worker
+    restart: always
+    <<: *app-env
+    command: ["celery", "-A", "app.celery_app.celery", "worker", "--concurrency=2", "-l", "info"]
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+      - crawlraw:/app/data/raw          # 定时采集产物持久化（月度增量累积 + load 读取）
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      api: {condition: service_started}
+
+  # ---------- Celery beat（定时：月度增量采集 + 每日备份）----------
+  beat:
+    image: carmirror-app:latest
+    container_name: carmirror-beat
+    restart: always
+    <<: *app-env
+    command: ["celery", "-A", "app.celery_app.celery", "beat", "-l", "info"]
+    depends_on:
+      redis: {condition: service_healthy}
+
+  # ---------- Caddy（HTTPS 边缘：前端静态 + /api 反代）----------
+  caddy:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    container_name: carmirror-caddy
+    restart: always
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddydata:/data            # 证书持久化（避免重启重申请被 LE 限流）
+      - caddyconfig:/config
+    depends_on:
+      api: {condition: service_started}
+
+volumes:
+  pgdata:
+  miniodata:
+  redisdata:
+  caddydata:
+  caddyconfig:
+  crawlraw:        # 定时采集的原始数据（worker 写/读）

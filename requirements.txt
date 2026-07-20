@@ -1,0 +1,28 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sqlalchemy>=2.0
+sqlglot>=25                  # SQL 安全护栏：AST 级解析，只放行单条 SELECT（替代 sqlparse 关键字匹配）
+openai>=1.30
+python-dotenv>=1.0
+pydantic>=2.6
+sse-starlette>=2.1
+passlib[bcrypt]>=1.7.4        # 密码哈希（bcrypt）
+bcrypt==4.0.1                 # 必须 <4.1：passlib 1.7.4 与 bcrypt>=4.1/5.x 不兼容（自检 >72 字节会抛错）
+python-jose[cryptography]>=3.3 # JWT 签发/校验
+psycopg[binary]>=3.1           # PostgreSQL 驱动；RAG/联调/生产切 PG 用，SQLite demo 可不装
+python-multipart>=0.0.9        # FastAPI 文件上传（/api/kb/upload）依赖
+
+# ===== RAG 离线入库管线（PRD-2 §5）=====
+pgvector>=0.3                   # pgvector 的 psycopg 适配（vector(1024) 读写）
+minio>=7.2                      # 对象存储客户端（原始文件先落 MinIO）
+celery>=5.3                     # 解析/切块/向量化异步任务
+redis>=5.0                     # Celery broker/backend（连 Redis）
+pymupdf>=1.24                  # PDF 解析（轻量，MinerU 留接口；PARSER_BACKEND=lite）
+pdfplumber>=0.11               # PDF 表格抽取（find_tables）
+sentence-transformers>=3.0     # BGE-large-zh 向量化（本地，含 torch CPU）；首次下载 ~1.3GB 权重
+jieba>=0.42                    # 中文分词：全文检索通道(PG simple 不切中文)入库/查询都靠它
+
+langgraph>=0.2                 # 双脑编排状态图（intent路由/重试环/hybrid并行/trace）
+
+# ===== 反爬数据采集（crawl4ai + Playwright stealth）=====
+crawl4ai>=0.9                  # 隐身浏览器抓取（Playwright+反检测+JS渲染+反爬检测）

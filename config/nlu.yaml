@@ -1,0 +1,165 @@
+nlu:
+  confidence_threshold: 0.70   # below this → clarify
+  ambiguity_gap: 0.15          # if top1_conf - top2_conf < this → clarify
+
+  greeting_prefixes:
+    - "你好"
+    - "您好"
+    - "早安"
+    - "晚安"
+    - "早上好"
+    - "再见"
+    - "拜拜"
+
+  no_data_signals:
+    - "no data"
+    - "not found"
+    - "no results"
+    - "no records"
+    - "未查询到"
+    - "没有找到"
+    - "0条结果"
+    - "不在覆盖范围"
+    - "不在数据库"
+    - "未在知识库中检索到"
+    - "未检索到"
+
+  few_shot_examples:
+    - question: "比亚迪2025年各月销量是多少"
+      intent: sql
+    - question: "特斯拉Model Y今年卖了多少台"
+      intent: sql
+    - question: "2025年纯电Top10排名"
+      intent: sql
+    - question: "理想L9和小米SU7谁卖得多"
+      intent: sql
+    - question: "小米SU7口碑怎么样"
+      intent: rag
+    - question: "最近的新能源购车补贴政策有哪些"
+      intent: rag
+    - question: "比亚迪为什么能卖那么好"
+      intent: rag
+    - question: "问界M9的用户评价如何"
+      intent: rag
+    - question: "理想L9销量如何，为什么这么好卖"
+      intent: hybrid
+    - question: "2025年纯电销量Top5，分析各品牌优势"
+      intent: hybrid
+    - question: "你好"
+      intent: chat
+    - question: "谢谢"
+      intent: chat
+    - question: "销量排名"
+      intent: clarify
+    - question: "那辆车"
+      intent: clarify
+    - question: "最近的数据"
+      intent: clarify
+    - question: "奔驰2025年销量"
+      intent: sql
+    - question: "奔驰GLC 2025年销量"
+      intent: sql
+    - question: "截至今年全国充电桩有多少个"
+      intent: rag
+    - question: "充电基础设施同比增长了多少"
+      intent: rag
+    - question: "800V高压平台是怎样的技术趋势"
+      intent: rag
+    - question: "新能源汽车续航技术有哪些趋势"
+      intent: rag
+    - question: "充电桩里公共和私人各占多少"
+      intent: rag
+    - question: "一季度我国汽车整车出口情况如何"
+      intent: rag
+    - question: "纯电车续航现在到什么水平，销量靠前的有哪些"
+      intent: hybrid
+    - question: "哪些品牌销量领先，它们各自有什么特征"
+      intent: hybrid
+
+  slot_rules:
+    sql_requires_one_of:
+      - brands
+      - models
+      - time
+      - energy_types
+      - explicit_metric
+    explicit_metric_keywords:
+      - "top"
+      - "Top"
+      - "销量"
+      - "对比"
+      - "比较"
+      - "最多"
+      - "第一"
+      - "销量榜"
+      - "增长"
+      - "下滑"
+
+  # 关键词实体兜底列表（当 LLM 实体抽取返回空时使用）
+  # 业务同学可直接在此添加新品牌，不需要改代码
+  keyword_brands:
+    - 比亚迪
+    - 特斯拉
+    - 理想
+    - 蔚来
+    - 小鹏
+    - 零跑
+    - 哪吒
+    - 问界
+    - 极氪
+    - 小米
+    - 吉利
+    - 长安
+    - 奇瑞
+    - 长城
+    - 五菱
+    - 广汽
+    - 埃安
+    - 深蓝
+    - 腾势
+    - 奔驰
+    - 宝马
+    - 奥迪
+    - 丰田
+    - 本田
+    - 大众
+    - 福特
+    - 日产
+    - 上汽
+    - 北汽
+    - 东风
+    - 红旗
+    - 领克
+    - 欧拉
+    - 岚图
+    - 智己
+    - 阿维塔
+    - 启源
+    - 银河
+    - 极越
+    - 法拉利
+    - 保时捷
+    - 兰博基尼
+    - 玛莎拉蒂
+    - 沃尔沃
+    - 路虎
+    - 凯迪拉克
+    - 别克
+    - 雪佛兰
+    - 现代
+    - 起亚
+    - 马自达
+    - 斯巴鲁
+    - 三菱
+
+  business_rules:
+    - if_contains: ["政策", "补贴", "购置税"]
+      force_intent: rag
+    - if_contains: ["法规", "标准", "规定", "条例"]
+      force_intent: rag
+    - if_contains: ["充电桩", "充电站", "充电基础设施", "换电站"]
+      force_intent: rag
+    - if_contains: ["出口", "进口", "渗透率", "保有量", "产量"]
+      force_intent: rag
+    - if_contains: ["800V", "固态电池", "智驾", "自动驾驶", "车路协同"]
+      force_intent: rag

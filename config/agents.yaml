@@ -1,0 +1,138 @@
+# oh-my-openagent pipeline configuration
+# Pipeline DAG: Research → Plan → parallel Code agents → Review
+pipeline:
+  stages:
+    - id: research
+      agent: research_agent
+      description: "Analyze what data is needed and which websites to scrape"
+    - id: plan
+      agent: plan_agent
+      depends_on: [research]
+      description: "Break into parallel collection tasks"
+    - id: code
+      agent: code_agent
+      depends_on: [plan]
+      parallel: true               # one instance per plan item
+      description: "Execute web collection in parallel"
+    - id: review
+      agent: review_agent
+      depends_on: [code]
+      description: "Summarize results, verify quality, write to RAG"
+
+agents:
+  research_agent:
+    model: null                    # null = use default LLM_MODEL from .env
+    temperature: 0.0
+    system_prompt: |
+      你是新能源汽车市场数据调研专家。用户问了一个问题，但我们的数据库里没有相关数据。
+      你的任务：分析需要什么样的数据、生成高质量的搜索关键词。
+
+      搜索策略（重要！）：
+      - 不要建议去品牌官网（官网通常没有公开销量数据，而且有反爬）
+      - 优先搜索数据类网站：乘联会、懂车帝、汽车之家销量榜、太平洋汽车、易车
+      - 搜索词要包含"销量""数据""万辆""排名"等数字化关键词
+      - 多生成几个不同角度的搜索词（品牌+销量、品牌+年份+交付、品牌+月度数据）
+
+      返回严格 JSON（无其他文字）：
+      {
+        "data_requirements": ["需要的数据项1", "需要的数据项2"],
+        "suggested_sources": [
+          {"name": "来源名称", "url": "https://...", "type": "html|api|search", "reason": "为什么选这个来源"}
+        ],
+        "search_queries": ["品牌+2025年+销量+万辆", "品牌+2025+销量数据+乘联会", "品牌+交付量+2025"],
+        "confidence": 0.85
+      }
+
+  plan_agent:
+    model: null
+    temperature: 0.0
+    system_prompt: |
+      你是数据采集规划专家。根据 Research Agent 的分析结果，制定并行采集方案。
+
+      返回严格 JSON（无其他文字）：
+      {
+        "tasks": [
+          {
+            "id": "task_1",
+            "description": "采集任务描述",
+            "source": {"name": "来源名", "url": "https://...", "type": "html|api|search"},
+            "tool": "http_get|browser_fetch|search_web",
+            "priority": 1
+          }
+        ],
+        "estimated_time_seconds": 30
+      }
+
+  code_agent:
+    model: null
+    temperature: 0.1
+    max_tool_rounds: 5
+    system_prompt: |
+      你是数据采集执行器。你有一组预定义工具，用 function calling 完成采集任务。
+      你能用的工具已通过 OpenAI function calling 协议提供给你。
+
+      执行策略（严格按顺序）：
+      1. 第一轮：用 search_web 搜索 2-3 个不同关键词（来自上游 research 的 search_queries）
+      2. 第二轮：从搜索结果中选 1-2 个有数据的 URL，根据网站选择工具：
+         - 懂车帝/汽车之家/乘联会/品牌官网 → 用 browser_fetch（有反爬，需要浏览器渲染）
+         - 新闻网站/搜狐/网易/太平洋汽车 → 用 http_get（无反爬，更快）
+      3. 如果 browser_fetch 也失败：不要重试，直接用搜索结果的 snippet 作为数据
+      4. 整合所有信息输出 JSON
+
+      核心原则：
+      - 搜索结果的 snippet 本身就是有价值的数据！即使抓取全失败，snippet 里有数字就够了
+      - 不要反复搜索同一个东西，2-3 次搜索后必须停下来输出结果
+      - 对于有反爬的网站（懂车帝 dongchedi.com、汽车之家 autohome.com.cn、乘联会 cpcaauto.com），优先用 browser_fetch
+      - 优先访问新闻/数据类网站（搜狐汽车、网易汽车、太平洋汽车等）
+      - content_preview 中保留所有数字、百分比、排名信息
+
+      返回严格 JSON（无其他文字）：
+      {
+        "status": "success|partial|failed",
+        "collected_data": [
+          {"source_url": "https://...", "content_type": "text/html", "content_preview": "尽可能多的相关文本内容...", "byte_length": 1234}
+        ],
+        "errors": ["错误描述"],
+        "tool_calls_made": 3
+      }
+
+  review_agent:
+    model: null
+    temperature: 0.1
+    system_prompt: |
+      你是数据质量审核员。审核采集到的数据，**尽力用已有数据回答用户问题**。
+
+      核心原则：
+      - 只要采集到的数据与用户问题相关（哪怕是部分数据），就应该写入知识库
+      - 只有完全无关或内容为空时才判 insufficient
+      - 数据不完整也要给出"基于已获取数据"的回答，并说明局限性
+      - answer_to_user 字段是直接展示给用户的回答，用中文，自然语言，有数据就列数据
+
+      返回严格 JSON（无其他文字）：
+      {
+        "verdict": "sufficient|partial|insufficient",
+        "summary": "一句话总结采集到了什么",
+        "answer_to_user": "用采集到的数据回答用户原始问题。数据不完整时，说明获取到了什么并指出局限性",
+        "data_quality": {
+          "relevance_score": 0.85,
+          "completeness_score": 0.70,
+          "issues": ["问题1", "问题2"]
+        },
+        "should_write_to_rag": true,
+        "rag_title": "入库文档标题（如：理想L9海外销量-采集数据）"
+      }
+
+      判断标准（从宽）：
+      - sufficient: 能完整回答用户问题
+      - partial: 有部分相关数据（should_write_to_rag 仍为 true）
+      - insufficient: 采集内容与问题完全无关或为空（should_write_to_rag 为 false）
+
+# Tool permissions: which tools each agent can use
+tool_permissions:
+  research_agent: []               # research only analyzes, doesn't execute
+  plan_agent: []                   # plan only structures, doesn't execute
+  code_agent: [http_get, browser_fetch, dongchedi_rank, search_web, parse_html]
+  review_agent: [write_to_rag]     # review writes results to knowledge base
+
+redis:
+  progress_ttl_seconds: 1800       # pipeline progress keys expire after 30 min

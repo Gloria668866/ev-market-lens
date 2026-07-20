@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.vite
+
+# 本地冒烟测试产物（保留 .smoke/*.py，忽略截图/输出/日志）
+.smoke/*.png
+.smoke/*.txt
+.smoke/*.log
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

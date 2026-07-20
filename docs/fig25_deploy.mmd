@@ -1,0 +1,14 @@
+flowchart LR
+  User[公网用户] --> CADDY[Caddy/Nginx HTTPS+反代]
+  CADDY --> FE2[前端静态资源]
+  CADDY --> API[FastAPI 容器]
+  API --> DB2[(PostgreSQL 容器)]
+  API --> CH[(Chroma 容器)]
+  API --> EXT[/LLM 云 API/]
+  subgraph Server[云服务器 1台 + Docker Compose]
+    CADDY
+    FE2
+    API
+    DB2
+    CH
+  end

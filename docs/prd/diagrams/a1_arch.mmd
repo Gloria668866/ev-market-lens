@@ -1,0 +1,23 @@
+flowchart TB
+    U[用户<br/>自然语言提问] --> FE[前端对话界面<br/>SSE 流式]
+    FE --> AG[Agent 编排层<br/>LangGraph]
+    AG --> RT{意图路由}
+    RT -->|查数据| T2S[结构化脑<br/>Text2SQL]
+    RT -->|查文档| RAG[非结构化脑<br/>RAG 知识库问答]
+    RT -->|两者都要| BOTH[混合编排]
+    BOTH --> T2S
+    BOTH --> RAG
+    T2S --> DB[(分析库<br/>PostgreSQL)]
+    RAG --> VDB[(知识库<br/>向量库)]
+    T2S --> VIZ[图表生成<br/>ECharts]
+    T2S --> INS[洞察/归因<br/>LLM]
+    RAG --> ANS[带引用的答案]
+    VIZ --> OUT[统一结果<br/>图表+结论+引用]
+    INS --> OUT
+    ANS --> OUT
+    OUT --> FE
+    classDef u fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef brain fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef store fill:#E6F4EA,stroke:#34A853,color:#000;
+    classDef out fill:#F3E8FD,stroke:#9334E6,color:#000;
+    class U,FE u; class AG,RT,T2S,RAG,BOTH brain; class DB,VDB store; class VIZ,INS,ANS,OUT out;

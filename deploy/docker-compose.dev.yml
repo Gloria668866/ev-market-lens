@@ -1,0 +1,111 @@
+# ============================================================
+# 车市镜 · 本地「生产同款」基础设施（给后端联调用）
+# 一条命令拉起：PostgreSQL16+pgvector / MinIO(对象存储) / Redis(队列+缓存)
+#
+# 用法（在 deploy/ 目录下，读取仓库根的 .env 作为唯一密钥来源）：
+#   docker compose --env-file ../.env -f docker-compose.dev.yml up -d
+#   docker compose --env-file ../.env -f docker-compose.dev.yml ps      # 看 healthy
+#   docker compose --env-file ../.env -f docker-compose.dev.yml down    # 停（保留数据卷）
+#   docker compose --env-file ../.env -f docker-compose.dev.yml down -v # 停并清空数据（重置库）
+#
+# 密钥只在 .env（已 gitignore）；本文件只引用 ${变量}，不写死任何口令。
+# ============================================================
+name: carmirror-dev
+
+services:
+  # ---------- PostgreSQL 16 + pgvector ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: carmirror-postgres
+    restart: unless-stopped
+    environment:
+      # 超级用户（建库建角色用；后端不用它连）
+      POSTGRES_USER: ${POSTGRES_SUPER_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_SUPER_DB:-postgres}
+      # 传给 initdb 脚本（00-init.sh）建两个库 + 两个角色
+      APP_DB_NAME: ${APP_DB_NAME}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      BI_DB_NAME: ${BI_DB_NAME}
+      BI_READONLY_USER: ${BI_READONLY_USER}
+      BI_READONLY_PASSWORD: ${BI_READONLY_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 初始化脚本（仅数据卷为空的首次启动执行）；子目录 sql/ 由脚本显式载入
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ---------- MinIO 对象存储（存上传/爬取的原始文档）----------
+  minio:
+    image: minio/minio:latest
+    container_name: carmirror-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"        # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"    # Web 控制台
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # ---------- MinIO 初始化：建桶（一次性容器，建完即退出）----------
+  minio-init:
+    image: minio/mc:latest
+    container_name: carmirror-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_UPLOADS: ${MINIO_BUCKET_UPLOADS:-kb-uploads}
+      MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-crawl-raw}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_UPLOADS"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_RAW"
+        echo ">> [minio-init] 桶就绪: $$MINIO_BUCKET_UPLOADS / $$MINIO_BUCKET_RAW"
+    restart: "no"
+
+  # ---------- Redis（Celery 队列 + 缓存）----------
+  redis:
+    image: redis:7-alpine
+    container_name: carmirror-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}   # 仅供下面 healthcheck 读取
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  pgdata:
+  miniodata:
+  redisdata:

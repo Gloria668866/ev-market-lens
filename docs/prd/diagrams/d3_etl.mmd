@@ -1,0 +1,15 @@
+flowchart LR
+    R[(原始数据湖)] --> C1[结构校验<br/>缺失/异常/格式]
+    C1 --> C2[清洗<br/>单位归一/去噪]
+    C2 --> C3[去重<br/>主键+模糊去重]
+    C3 --> C4[实体对齐<br/>车型/品牌别名映射]
+    C4 --> C5[口径标准化<br/>价格区间/时间粒度]
+    C5 --> D{分流}
+    D -->|事实+维度| W[(数仓 ODS→DWD→DWS)]
+    D -->|文本文档| K[文档解析<br/>PDF/HTML抽取]
+    K --> K2[分块切片<br/>语义/重叠窗口]
+    K2 --> K3[向量化<br/>Embedding]
+    K3 --> KV[(向量库)]
+    classDef p fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef s fill:#E6F4EA,stroke:#34A853,color:#000;
+    class C1,C2,C3,C4,C5,K,K2,K3 p; class R,W,KV s;

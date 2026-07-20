@@ -1,0 +1,18 @@
+flowchart LR
+    subgraph ING[离线：知识入库]
+        D1[用户上传文档<br/>PDF/Word/网页] --> D2[解析+清洗]
+        D2 --> D3[语义切片]
+        D3 --> D4[Embedding 向量化]
+        D4 --> D5[(向量库)]
+    end
+    subgraph QRY[在线：检索问答]
+        Q1[用户提问] --> Q2[问题向量化]
+        Q2 --> Q3[向量检索 Top-K]
+        Q3 --> Q4[重排序 Rerank]
+        Q4 --> Q5[拼接上下文<br/>+ Prompt]
+        Q5 --> Q6[LLM 生成答案<br/>带引用溯源]
+    end
+    D5 -.检索.-> Q3
+    classDef i fill:#E6F4EA,stroke:#34A853,color:#000;
+    classDef q fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    class D1,D2,D3,D4,D5 i; class Q1,Q2,Q3,Q4,Q5,Q6 q;

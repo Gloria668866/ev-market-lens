@@ -1,0 +1,34 @@
+# 车市镜 · Caddy 反向代理（自动 HTTPS）
+# - 前端静态资源 + SPA 回退（history 路由）
+# - /api/* 反代到 FastAPI（api:8000）
+# - {$DOMAIN} 来自环境变量，Caddy 自动向 Let's Encrypt 申请并续期证书
+# 本地无域名测试可把 {$DOMAIN} 换成 :80 或 localhost（自签），生产填真实域名。
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# 后端 API（含 SSE：关闭缓冲，保证流式逐事件下发）
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# 前端 SPA：静态文件 + 找不到则回 index.html（前端路由）
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		# 基础安全响应头
+		Strict-Transport-Security "max-age=31536000;"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

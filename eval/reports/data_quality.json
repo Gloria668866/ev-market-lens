@@ -1,0 +1,96 @@
+{
+  "total": 18,
+  "passed": 18,
+  "results": [
+    {
+      "expectation": "fact_sales_rank 行数 == 8072",
+      "success": true,
+      "detail": "实际 8072"
+    },
+    {
+      "expectation": "fact_price 行数 == 8072",
+      "success": true,
+      "detail": "实际 8072"
+    },
+    {
+      "expectation": "fact_review 行数 == 8072",
+      "success": true,
+      "detail": "实际 8072"
+    },
+    {
+      "expectation": "dim_series 行数 == 409",
+      "success": true,
+      "detail": "实际 409"
+    },
+    {
+      "expectation": "dim_brand 行数 == 101",
+      "success": true,
+      "detail": "实际 101"
+    },
+    {
+      "expectation": "dim_date 行数 == 29",
+      "success": true,
+      "detail": "实际 29"
+    },
+    {
+      "expectation": "fact_sales_rank.series_id 无空值",
+      "success": true,
+      "detail": "0 条空"
+    },
+    {
+      "expectation": "fact_sales_rank.date_id 无空值",
+      "success": true,
+      "detail": "0 条空"
+    },
+    {
+      "expectation": "fact_sales_rank.volume 无空值",
+      "success": true,
+      "detail": "0 条空"
+    },
+    {
+      "expectation": "fact_sales_rank.new_energy_type 取值 ⊆ [1, 2, 3]",
+      "success": true,
+      "detail": "0 条越界"
+    },
+    {
+      "expectation": "fact_sales_rank.volume >= 0",
+      "success": true,
+      "detail": "0 条小于 0"
+    },
+    {
+      "expectation": "fact_sales_rank.rank >= 1",
+      "success": true,
+      "detail": "0 条小于 1"
+    },
+    {
+      "expectation": "dim_series.powertrain 取值 ⊆ ['纯电', '插混', '增程']",
+      "success": true,
+      "detail": "0 条越界"
+    },
+    {
+      "expectation": "dim_date.year 取值 ⊆ [2024, 2025, 2026]",
+      "success": true,
+      "detail": "0 条越界"
+    },
+    {
+      "expectation": "fact_review.score ∈ [0,5]",
+      "success": true,
+      "detail": "0 条越界"
+    },
+    {
+      "expectation": "fact_sales_rank (series_id,date_id,new_energy_type,rank_type) 唯一",
+      "success": true,
+      "detail": "0 组重复"
+    },
+    {
+      "expectation": "fact_sales_rank.series_id → dim_series.series_id 外键完整",
+      "success": true,
+      "detail": "0 条孤儿"
+    },
+    {
+      "expectation": "fact_sales_rank.date_id → dim_date.date_id 外键完整",
+      "success": true,
+      "detail": "0 条孤儿"
+    }
+  ]
+}

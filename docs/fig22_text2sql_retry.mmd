@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant U as 用户
+  participant A as Agent
+  participant L as LLM
+  participant DB as 数据库(只读)
+  U->>A: 自然语言问题
+  A->>A: Schema Linking + few-shot 组装 Prompt
+  A->>L: 生成 SQL
+  L-->>A: SQL v1
+  A->>A: sqlparse 校验(仅 SELECT)
+  A->>DB: 执行
+  DB-->>A: 报错(如字段名错)
+  A->>L: 把错误信息+原SQL回喂，请修正
+  L-->>A: SQL v2
+  A->>DB: 再执行
+  DB-->>A: 结果集
+  A-->>U: 渲染图表 + 洞察

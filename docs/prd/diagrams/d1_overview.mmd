@@ -1,0 +1,13 @@
+flowchart LR
+    A[数据源<br/>车型库/报价/销量榜<br/>用户口碑/行研报告] --> B[采集层<br/>分布式爬虫+反爬<br/>调度/增量/限速]
+    B --> C[清洗层<br/>去噪/去重/类型规整<br/>实体对齐/口径标准化]
+    C --> D{数据分流}
+    D -->|结构化| E[(分析库<br/>维度+事实建模<br/>PostgreSQL)]
+    D -->|非结构化| F[(知识库<br/>切片+向量化<br/>向量库)]
+    E --> G[数据质量监控<br/>校验/告警/血缘]
+    F --> G
+    G --> H[供给上层<br/>Text2SQL / RAG]
+    classDef src fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef proc fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef store fill:#E6F4EA,stroke:#34A853,color:#000;
+    class A src; class B,C,G proc; class E,F store;

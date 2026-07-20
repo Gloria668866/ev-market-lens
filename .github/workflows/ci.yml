@@ -1,0 +1,71 @@
+name: CI
+
+# PR 与推 main 时自动跑：纯单元测试 + 评测红线（低于阈值阻断合并）。
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # 只装纯单测所需的轻量依赖：不装 torch/sentence-transformers/celery 等重包。
+      # 依赖这些的用例已标 @pytest.mark.integration（CI 跳过）或用 importorskip 自动跳过。
+      - name: 安装依赖
+        run: |
+          python -m pip install -U pip
+          pip install pytest httpx sqlparse "openai>=1.30" "python-dotenv>=1.0" "pydantic>=2.6" "sqlalchemy>=2.0" "langgraph>=0.2"
+      # 单元测试（排除 integration：不依赖 bi_demo.db / PG / 本地模型）
+      # 同时执行 test_eval_thresholds：读取仓库内已提交的 eval/reports/*.json，
+      # 任一评测指标低于红线阈值 → 本步骤失败 → 阻断 PR 合并（等价 DeepEval 阈值门禁）。
+      - name: 单元测试 + 评测红线
+        env:
+          LLM_API_KEY: dummy   # 仅供 import 通过，单测不真调 LLM
+        run: python -m pytest tests/ -m "not integration" -q
+
+  # 完整评测（RAGAS 四指标 / Text2SQL 执行准确率 / 意图混淆矩阵 / 数据质量）需要
+  # LLM key + PostgreSQL(pgvector) + 本地 BGE/reranker 模型，CI 公共 runner 难具备。
+  # 实践：在带数据的环境（self-hosted runner 或定时任务）跑 eval/*.py 产出报告，
+  # 提交 eval/reports/*.json 后，由上面的「评测红线」把关。命令见 docs/工作记录/测试/。
+
+  # ---- 运维侧：构建镜像（验证 Dockerfile 可构建；可选推 GHCR）----
+  # 仅在推 main 时跑（构建含 torch 较慢）；测试通过才构建。
+  build-images:
+    needs: unit-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # compose 配置校验（catch 编排语法/插值错误）
+      - name: 校验 prod compose 配置
+        run: |
+          cp .env.prod.example .env.prod
+          cd deploy && docker compose --env-file ../.env.prod -f docker-compose.prod.yml config -q
+      # 构建后端镜像（验证 Dockerfile.api 可构建；torch 等重依赖）
+      - name: 构建后端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.api
+          push: false
+          tags: carmirror-app:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # 构建前端镜像（Vite 构建 + Caddy）
+      - name: 构建前端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.web
+          push: false
+          tags: carmirror-web:ci
+      # 可选：推 GHCR（去掉注释 + 配 packages 写权限即可）；部署到服务器走 SSH/watchtower。
+      # - name: 登录 GHCR
+      #   uses: docker/login-action@v3
+      #   with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }

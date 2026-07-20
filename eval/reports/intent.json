@@ -1,0 +1,149 @@
+{
+  "n": 100,
+  "accuracy": 0.89,
+  "correct": 89,
+  "labels": [
+    "sql",
+    "rag",
+    "hybrid",
+    "clarify"
+  ],
+  "pred_labels": [
+    "clarify",
+    "hybrid",
+    "rag",
+    "sql"
+  ],
+  "confusion": {
+    "sql": {
+      "clarify": 0,
+      "hybrid": 0,
+      "rag": 0,
+      "sql": 38
+    },
+    "rag": {
+      "clarify": 0,
+      "hybrid": 2,
+      "rag": 25,
+      "sql": 7
+    },
+    "hybrid": {
+      "clarify": 0,
+      "hybrid": 14,
+      "rag": 0,
+      "sql": 2
+    },
+    "clarify": {
+      "clarify": 12,
+      "hybrid": 0,
+      "rag": 0,
+      "sql": 0
+    }
+  },
+  "per_class": {
+    "sql": {
+      "tp": 38,
+      "fp": 9,
+      "fn": 0,
+      "support": 38,
+      "precision": 0.8085,
+      "recall": 1.0,
+      "f1": 0.8941
+    },
+    "rag": {
+      "tp": 25,
+      "fp": 0,
+      "fn": 9,
+      "support": 34,
+      "precision": 1.0,
+      "recall": 0.7353,
+      "f1": 0.8475
+    },
+    "hybrid": {
+      "tp": 14,
+      "fp": 2,
+      "fn": 2,
+      "support": 16,
+      "precision": 0.875,
+      "recall": 0.875,
+      "f1": 0.875
+    },
+    "clarify": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "support": 12,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "errors": [
+    {
+      "id": "int-043",
+      "q": "截至2026年3月底全国充电桩有多少个",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-044",
+      "q": "五一期间高速公路新能源车充电了多少次",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-045",
+      "q": "2026年一季度我国汽车整车出口情况如何",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-049",
+      "q": "新能源汽车续航技术有哪些趋势",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-051",
+      "q": "报告对2025年销量总览是怎么说的",
+      "gold": "rag",
+      "pred": "hybrid"
+    },
+    {
+      "id": "int-052",
+      "q": "充电基础设施同比增长了多少",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-053",
+      "q": "800V高压平台是怎样的技术趋势",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-061",
+      "q": "报告对续航趋势的判断是什么",
+      "gold": "rag",
+      "pred": "hybrid"
+    },
+    {
+      "id": "int-072",
+      "q": "充电桩里公共和私人各占多少",
+      "gold": "rag",
+      "pred": "sql"
+    },
+    {
+      "id": "int-078",
+      "q": "纯电车续航现在到什么水平，销量靠前的有哪些",
+      "gold": "hybrid",
+      "pred": "sql"
+    },
+    {
+      "id": "int-084",
+      "q": "哪些品牌销量领先，它们各自有什么特征",
+      "gold": "hybrid",
+      "pred": "sql"
+    }
+  ]
+}

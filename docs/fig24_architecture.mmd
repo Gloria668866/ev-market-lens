@@ -1,0 +1,14 @@
+flowchart TB
+  subgraph FE[前端 Vue3 + ECharts]
+    UI[对话区 + 图表 + 过程面板]
+  end
+  subgraph BE[后端 FastAPI]
+    AG[Agent 编排 LangGraph]
+    T2S[Text2SQL 模块]
+    SAFE[SQL 安全校验]
+    RAGM[报告 RAG]
+  end
+  UI -- SSE/HTTP --> AG
+  AG --> T2S --> SAFE --> PG[(业务库 PostgreSQL 只读)]
+  AG --> RAGM --> VDB[(向量库 Chroma)]
+  AG --> LLM[/通义Qwen / DeepSeek API/]

@@ -1,0 +1,6 @@
+# 测试/评测开发依赖（与运行时 requirements.txt 分开）。
+# 安装：.venv/Scripts/python.exe -m pip install -r requirements-dev.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+pytest>=8.0
+httpx>=0.27          # FastAPI TestClient 依赖
+# 说明：RAGAS/DeepEval/Great-Expectations 未纳入——评测指标按其原定义自实现（见 eval/、docs/工作记录/测试/）。
+# 原因：装 ragas 会改动 openai/jiter 依赖链（WinError 文件锁 + 破坏现有运行环境风险），自实现可复现、可进 CI、零额外重依赖。

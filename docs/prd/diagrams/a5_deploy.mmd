@@ -1,0 +1,29 @@
+flowchart TB
+    subgraph CLIENT[客户端]
+        BR[浏览器]
+    end
+    subgraph EDGE[接入层]
+        CA[Caddy<br/>HTTPS/反向代理]
+    end
+    subgraph APP[应用层 · 单台云 VPS · Docker Compose]
+        API[FastAPI<br/>/api/ask SSE]
+        WK[采集/清洗任务<br/>Celery Worker]
+    end
+    subgraph DATA[数据层]
+        PG[(PostgreSQL<br/>+ pgvector)]
+        RD[(Redis<br/>队列/缓存)]
+        MO[(MinIO<br/>原始数据)]
+    end
+    LLM[DeepSeek-V4<br/>对话大模型 · 云API]
+    BR --> CA --> API
+    API --> PG
+    API --> RD
+    API --> LLM
+    WK --> PG
+    WK --> RD
+    WK --> MO
+    classDef c fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef e fill:#F3E8FD,stroke:#9334E6,color:#000;
+    classDef a fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef d fill:#E6F4EA,stroke:#34A853,color:#000;
+    class BR c; class CA e; class API,WK a; class PG,RD,MO,LLM d;

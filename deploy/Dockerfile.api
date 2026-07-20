@@ -1,0 +1,34 @@
+# 车市镜 · 后端镜像（FastAPI / Celery worker / Celery beat 三者共用，靠 command 区分）
+# 含 RAG 全套：torch(CPU)+sentence-transformers+pgvector+jieba；爬虫 scrapling（给 beat 定时采集用）。
+# 模型权重不打进镜像（~2.8GB）——运行时挂 /models 卷（见 docker-compose.prod.yml / DEPLOY.md）。
+FROM python:3.12-slim
+
+# 系统依赖：libgomp1=torch 运行库；curl=healthcheck；tini=正确转发信号(Celery/uvicorn 优雅退出)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 curl tini && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 先装依赖（利用层缓存）；scrapling 不在 requirements，单独装（仅用 Fetcher.get，无需浏览器）
+ARG PIP_INDEX_URL=https://pypi.org/simple
+COPY requirements.txt .
+RUN pip install --no-cache-dir -i ${PIP_INDEX_URL} -r requirements.txt \
+    && pip install --no-cache-dir -i ${PIP_INDEX_URL} "scrapling>=0.4"
+
+# 再拷代码（改代码不必重装依赖）
+COPY app/ ./app/
+COPY data/ ./data/
+COPY sql/ ./sql/
+# 定时任务要 import 的 PG 加载器（让 deploy 成为可导入包）
+COPY deploy/load_analysis_pg.py ./deploy/load_analysis_pg.py
+RUN touch deploy/__init__.py
+
+ENV PYTHONUNBUFFERED=1 PYTHONUTF8=1 \
+    HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    EMBED_MODEL_NAME=/models/bge-large-zh-v1.5 \
+    RERANK_MODEL_NAME=/models/bge-reranker-base
+
+EXPOSE 8000
+ENTRYPOINT ["/usr/bin/tini", "--"]
+# 默认起 API；worker/beat 在 compose 里用 command 覆盖
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

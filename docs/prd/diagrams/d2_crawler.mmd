@@ -1,0 +1,20 @@
+flowchart TB
+    subgraph SCHED[调度与任务管理]
+        S1[任务队列<br/>Redis] --> S2[调度器<br/>APScheduler/Celery]
+        S2 --> S3[去重指纹<br/>BloomFilter]
+    end
+    subgraph FETCH[采集与反爬 · Scrapling]
+        F1[Scrapling Fetcher<br/>StealthyFetcher] --> F2[代理IP池<br/>轮换/熔断]
+        F2 --> F3[反爬绕过<br/>UA轮换/限速/重试]
+    end
+    subgraph PARSE[解析与落地]
+        P1[Scrapling<br/>自适应选择器] --> P2[字段抽取<br/>结构化映射]
+        P2 --> P3[原始落地<br/>JSON/对象存储]
+    end
+    SCHED --> FETCH
+    FETCH --> PARSE
+    P3 --> OUT[(原始数据湖<br/>MinIO 对象存储)]
+    classDef a fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef b fill:#FCE8E6,stroke:#EA4335,color:#000;
+    classDef c fill:#E6F4EA,stroke:#34A853,color:#000;
+    class S1,S2,S3 a; class F1,F2,F3 b; class P1,P2,P3,OUT c;

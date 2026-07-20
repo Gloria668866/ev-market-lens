@@ -1,0 +1,15 @@
+flowchart TD
+  U[用户自然语言提问] --> INT[意图识别/复杂度判断]
+  INT --> R{路由}
+  R -- 查数据 --> SL[Schema Linking 选相关表/列]
+  R -- 查口径/报告 --> RAG[文档 RAG 检索]
+  R -- 闲聊/无关 --> CHAT[直接回答/婉拒]
+  SL --> GEN[LLM 生成 SQL]
+  GEN --> CHK{SQL 校验 仅SELECT+语法}
+  CHK -- 不通过 --> FIX[报错回喂 重写] --> CHK
+  CHK -- 通过 --> EXE[执行查询 只读]
+  EXE -- 出错/空 --> FIX
+  EXE -- 成功 --> VIZ[LLM 推荐图表规格]
+  RAG --> INS
+  VIZ --> INS[LLM 生成洞察+建议]
+  INS --> OUT[SSE 流式输出: 文字+图表+SQL]

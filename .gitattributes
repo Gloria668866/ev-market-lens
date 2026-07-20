@@ -1,0 +1,4 @@
+# 进容器执行的脚本必须用 LF 行尾，否则 Linux 里会报 `/bin/bash^M: bad interpreter`
+*.sh            text eol=lf
+# 初始化 SQL 由容器内 psql 读取，统一 LF 更稳
+deploy/**/*.sql text eol=lf

@@ -1,0 +1,63 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.venv-scrapling/
+
+# ===== 密钥 / 环境（绝不入库）=====
+.env
+*.key
+*.pem
+
+# ===== 数据库（用 seed.py 可重新生成）=====
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+bi_demo.db
+
+# ===== 爬取的原始数据（用 data/crawl_sales.py / crawl_koubei.py 可重新生成，体积大）=====
+data/raw/
+
+# ===== RAG 语料候选（用 data/export_rag_corpus.py 可重新生成，体积大）=====
+data/rag_corpus/
+
+# ===== 本地 Embedding 模型权重（BGE-large-zh ~1.3GB，从 ModelScope/HF 下载）=====
+models/
+data/rag_samples/
+
+# ===== 探针大样本（保留 数据源字段清单.md 与脚本，忽略大体积原始响应）=====
+data/probe/*.json
+data/probe/*.html
+data/probe/*.txt
+
+# ===== Node（docx 生成用全局安装的 docx）=====
+node_modules/
+
+# ===== 渲染中间产物 =====
+*.pdf
+.diagrams_tmp/
+
+# ===== 评测中间日志（保留 eval/reports/*.json|*.md 供 CI 红线读，忽略临时日志）=====
+eval/reports/_*.log
+
+# ===== Agent 运行状态（oh-my-commit 等工具生成）=====
+.omc/
+**/.omc/
+
+# ===== 系统 / IDE =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ===== 运行时日志 =====
+uvicorn.log
+*.log
+
+# 生产环境密钥（绝不提交）
+.env.prod
+backups/

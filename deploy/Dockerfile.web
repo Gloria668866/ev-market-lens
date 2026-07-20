@@ -1,0 +1,17 @@
+# 车市镜 · 前端镜像（多阶段）：Node 构建 Vue/Vite 产物 → Caddy 静态托管 + 反代 /api + 自动 HTTPS
+# ---------- 构建阶段 ----------
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+# 生产构建参数：API 同源（空 base → 调 /api/*，由 Caddy 反代到后端）；走 live 真后端
+ENV VITE_API_BASE="" VITE_DATA_SOURCE=live
+RUN npm run build           # 产物 → /app/dist
+
+# ---------- 运行阶段：Caddy ----------
+FROM caddy:2-alpine
+COPY --from=build /app/dist /srv
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+# Caddy 自动申请/续期 Let's Encrypt 证书（需 80/443 可达 + 真实域名解析到本机）
+EXPOSE 80 443
