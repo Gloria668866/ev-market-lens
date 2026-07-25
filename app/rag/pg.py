@@ -159,12 +159,16 @@ def doc_parent_order(doc_id: int):
 
 
 def list_documents(user_id: int):
-    """列当前用户未软删的知识库文档（前端列表/轮询用）。"""
+    """列当前用户文档 + 系统公共种子文档（user_id=0）。"""
     with conn() as c:
         rows = c.execute(
-            "SELECT id,filename,status,file_type,chunk_count,created_at FROM kb_document "
-            "WHERE user_id=%s AND deleted_at IS NULL ORDER BY created_at DESC", (user_id,)).fetchall()
-    keys = ["id", "filename", "status", "file_type", "chunk_count", "created_at"]
+            "SELECT id,user_id,filename,status,file_type,source_uri,title,chunk_count,created_at "
+            "FROM kb_document WHERE (user_id=%s OR user_id=0) AND deleted_at IS NULL "
+            "ORDER BY CASE WHEN user_id=0 THEN 0 ELSE 1 END, created_at DESC",
+            (user_id,),
+        ).fetchall()
+    keys = ["id", "user_id", "filename", "status", "file_type", "source_uri",
+            "title", "chunk_count", "created_at"]
     return [dict(zip(keys, r)) for r in rows]
 
 

@@ -464,8 +464,18 @@ def _tool_parse_html(html: str, **kwargs) -> dict:
         return {"status": "failed", "error": str(e)[:200], "text": ""}
 
 
-def _tool_write_to_rag(title: str, content: str, source_url: str = "", **kwargs) -> dict:
-    """Write collected content into the RAG knowledge base as a public document (user_id=0).
+def _tool_write_to_rag(
+    title: str,
+    content: str,
+    source_url: str = "",
+    user_id: int = 0,
+    public: bool = True,
+    **kwargs,
+) -> dict:
+    """Write collected content into the RAG knowledge base.
+
+    The deterministic pipeline passes ``public=False`` and the initiating
+    user id. Public documents are reserved for the explicit seed-corpus flow.
     Uses the existing local_ingest pipeline (chunk → embed → store)."""
     try:
         # Construct a markdown document from the collected data
@@ -478,6 +488,8 @@ def _tool_write_to_rag(title: str, content: str, source_url: str = "", **kwargs)
             text=md_text,
             filename=filename,
             source_url=source_url,
+            user_id=user_id,
+            public=public,
         )
         return {
             "status": "success",
@@ -619,13 +631,19 @@ def execute_tool(tool_name: str, arguments: dict) -> dict:
 
 # ── RAG write helper (reuses existing pipeline) ────────────────────────────────
 
-def ingest_text_as_document(title: str, text: str, filename: str = "agent_collected.md",
-                            source_url: str = "", public: bool = True) -> tuple[int, int]:
+def ingest_text_as_document(
+    title: str,
+    text: str,
+    filename: str = "agent_collected.md",
+    source_url: str = "",
+    user_id: int = 0,
+    public: bool = True,
+) -> tuple[int, int]:
     """Write a text document through the RAG ingest pipeline.
 
     Uses local_ingest when RAG_BACKEND=local (default), pg ingest when RAG_BACKEND=pg.
-    public=True writes as user_id=None (visible to all users).
-    public=False writes as user_id=0 (system user, also public in local_store semantics).
+    Public documents use the backend's system-owner convention. Private
+    documents use the initiating user's id.
     """
     from .config import RAG_BACKEND
 
@@ -637,25 +655,28 @@ def ingest_text_as_document(title: str, text: str, filename: str = "agent_collec
         from .rag.chunk import build_chunks
         from .rag.parse import parse_document
 
-        source_uri = store.put_bytes(0, filename, data, "text/markdown")
-        doc_id = pg.create_document(0, filename, file_type, source_uri, title=title)
+        owner = 0 if public else user_id
+        source_uri = store.put_bytes(owner, filename, data, "text/markdown")
+        doc_id = pg.create_document(owner, filename, file_type, source_uri, title=title)
         blocks = parse_document(data, file_type)
         chunks = build_chunks(blocks, count_tokens=embed.count_tokens)
         children = [c for c in chunks if c["is_retrievable"]]
         vecs = embed.embed_passages([c["content_embed"] for c in children])
         emb_by_idx = {c["chunk_index"]: v for c, v in zip(children, vecs)}
-        n = pg.insert_chunks(doc_id, 0, chunks, emb_by_idx)
+        n = pg.insert_chunks(doc_id, owner, chunks, emb_by_idx)
         pg.set_status(doc_id, "ready", chunk_count=n)
         return doc_id, n
     else:
-        # RAG_BACKEND=local — write as public document
-        try:
-            from .rag.local_ingest import ingest_bytes as local_ingest_bytes
-            return local_ingest_bytes(0, filename, data, file_type, title=title, public=True)
-        except TypeError:
-            # Fallback: older local_ingest might not support public param
-            from .rag.local_ingest import ingest_bytes as local_ingest_bytes
-            return local_ingest_bytes(0, filename, data, file_type, title=title)
+        from .rag.local_ingest import ingest_bytes as local_ingest_bytes
+        return local_ingest_bytes(
+            user_id,
+            filename,
+            data,
+            file_type,
+            title=title,
+            public=public,
+            source_uri=source_url or "agent://auto-collect",
+        )
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 export const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '')
 
 // 'mock' = 用本地 mock（后端未就绪）；'live' = 连真后端。
-export const DATA_SOURCE = import.meta.env.VITE_DATA_SOURCE !== 'mock' ? 'live' : 'live'
+export const DATA_SOURCE = import.meta.env.VITE_DATA_SOURCE === 'mock' ? 'mock' : 'live'
 
 export const IS_MOCK = DATA_SOURCE === 'mock'
 
@@ -36,4 +36,5 @@ export const ENDPOINTS = {
   // 车型报价（查 fact_price 实采数据）
   prices: `${API_BASE}/api/prices`,
   priceBrands: `${API_BASE}/api/prices/brands`,
+  taskStream: (id) => `${API_BASE}/api/tasks/${id}/stream`,
 }

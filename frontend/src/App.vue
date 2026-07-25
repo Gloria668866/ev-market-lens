@@ -29,7 +29,11 @@ const showPrices = ref(false)
 
 function onAsk(q) { if (!activeId.value) newConversation(); send(q) }
 function onSelect(id) { selectConversation(id); showSide.value = false }
-function onNew() { newConversation(); showSide.value = false }
+function onNew() {
+  if (sending.value) stop()
+  newConversation()
+  showSide.value = false
+}
 
 const title = computed(() => (messages.value.length ? (active.value?.title || '对话') : '命令中心'))
 const subtitle = computed(() => (messages.value.length ? `${messages.value.filter((m) => m.role === 'user').length} 轮提问` : ''))

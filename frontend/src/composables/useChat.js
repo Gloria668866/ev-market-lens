@@ -5,6 +5,7 @@ import { reactive, ref, computed, watch } from 'vue'
 import { ask } from '@/api/client.js'
 import { IS_MOCK } from '@/api/config.js'
 import { listConversations, getConversation, deleteConversation as apiDeleteConversation } from '@/api/history.js'
+import { watchTask } from '@/api/tasks.js'
 import { useAuth } from '@/composables/useAuth.js'
 
 let _id = 0
@@ -19,7 +20,7 @@ function buildMsgFromHistory(m) {
     intent: m.intent, confidence: null, stages: [],
     sql: '', columns: m.columns || [], rows: m.rows || [],
     chartPayload: m.chart || null,
-    insight: m.content || '', citations: m.citations || [], error: null,
+    insight: m.content || '', citations: m.citations || [], collection: null, error: null,
   })
 }
 
@@ -46,7 +47,7 @@ function newAssistant(question = '') {
     intent: null, confidence: null, stages: [],
     sql: '', columns: [], rows: [],
     chartPayload: null,
-    insight: '', citations: [], error: null, startedAt: Date.now(),
+    insight: '', citations: [], collection: null, error: null, startedAt: Date.now(),
   })
 }
 
@@ -210,6 +211,39 @@ export function useChat() {
       case 'citation':
         // §9.1 逐条推：累加（一个事件一条引用）
         if (ev.citation) msg.citations.push(ev.citation); break
+      case 'collection':
+        if (!ev.taskId) break
+        msg.collection = reactive({
+          taskId: ev.taskId,
+          stage: 'queued',
+          status: ev.status || 'pending',
+          message: '任务已提交，等待执行…',
+        })
+        watchTask(ev.taskId, {
+          onEvent: (taskEvent) => {
+            if (!msg.collection) return
+            if (taskEvent.type === 'collection_stage') {
+              Object.assign(msg.collection, {
+                stage: taskEvent.stage || msg.collection.stage,
+                status: taskEvent.status || msg.collection.status,
+                message: taskEvent.message || taskEvent.preview || '',
+              })
+            } else if (taskEvent.type === 'collection_done') {
+              Object.assign(msg.collection, {
+                stage: 'done', status: 'completed', message: '采集与审核完成',
+              })
+              if (taskEvent.final_answer) {
+                msg.insight += `\n\n## 智能采集结果\n${taskEvent.final_answer}`
+              }
+            } else if (taskEvent.type === 'collection_error') {
+              Object.assign(msg.collection, {
+                stage: 'error', status: 'failed',
+                message: taskEvent.message || '采集任务失败',
+              })
+            }
+          },
+        })
+        break
       case 'done':
         msg.msgId = ev.msgId; break
       case 'error':

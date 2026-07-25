@@ -190,7 +190,8 @@ class TestPrices:
         data = r.json()
         assert "items" in data
         assert "count" in data
-        assert data["count"] <= 5
+        assert data["returned"] <= 5
+        assert data["count"] >= data["returned"]
 
     def test_price_brands_returns_list(self):
         client = _app_client()

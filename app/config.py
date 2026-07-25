@@ -58,6 +58,13 @@ MINIO_BUCKET_UPLOADS = os.getenv("MINIO_BUCKET_UPLOADS", "kb-uploads")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")  # dev 容器未启用密码
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
+# 本地开发允许在 Redis/Celery 不可用时退到单进程后台线程，保证请求立即返回且任务进度仍可查询。
+# 生产必须关闭：多进程/多副本下内存状态不共享，生产应由 Redis + Celery 承担可靠队列。
+_APP_ENV = os.getenv("APP_ENV", "development").lower()
+PIPELINE_LOCAL_FALLBACK = os.getenv(
+    "PIPELINE_LOCAL_FALLBACK",
+    "false" if _APP_ENV in ("production", "prod") else "true",
+).lower() in ("1", "true", "on", "yes")
 
 # —— Embedding 模型（§5.8 版本一致性：模型名/版本入 config；换模型必须全量重建索引）——
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-large-zh-v1.5")
@@ -75,9 +82,10 @@ RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "models/bge-reranker-base")  
 RECALL_VEC_K = int(os.getenv("RECALL_VEC_K", "20"))     # 向量召回候选数
 RECALL_KW_K = int(os.getenv("RECALL_KW_K", "20"))       # 关键词(全文)召回候选数
 RRF_K = int(os.getenv("RRF_K", "60"))                   # RRF 融合常数（经验值 60）
+RRF_FALLBACK_SCORE_MIN = float(os.getenv("RRF_FALLBACK_SCORE_MIN", "0.02"))
 RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "8"))      # 重排后保留的子块数
 CONTEXT_TOKEN_BUDGET = int(os.getenv("CONTEXT_TOKEN_BUDGET", "3000"))  # 父块上下文 token 预算（情形C）
 MAX_PARENTS = int(os.getenv("MAX_PARENTS", "5"))        # 父块数上限（防 lost-in-the-middle）
-RERANK_SCORE_MIN = float(os.getenv("RERANK_SCORE_MIN", "0.30"))  # 最高重排分低于此 → 判无依据（防幻觉）
+RERANK_SCORE_MIN = float(os.getenv("RERANK_SCORE_MIN", "0.20"))  # 本地评测校准；再叠加实体锚点门控
 NLU_CONFIG_PATH = os.getenv("NLU_CONFIG_PATH", "config/nlu.yaml")
 AGENTS_CONFIG_PATH = os.getenv("AGENTS_CONFIG_PATH", "config/agents.yaml")

@@ -137,7 +137,8 @@ def list_documents(user_id):
     init_store()
     with _conn() as c:
         rows = c.execute(
-            "SELECT id,filename,status,file_type,chunk_count,created_at FROM kb_document "
+            "SELECT id,user_id,filename,status,file_type,source_uri,title,chunk_count,created_at "
+            "FROM kb_document "
             "WHERE deleted_at IS NULL AND (user_id IS NULL OR user_id=?) ORDER BY user_id IS NULL DESC, created_at DESC",
             (user_id,)).fetchall()
     return [dict(r) for r in rows]
@@ -260,9 +261,12 @@ def get_chunks(chunk_ids):
 
 
 def stats():
-    """(docs, chunks) 计数，给 build 脚本/自检用。"""
+    """Return active document/chunk counts for build output and health checks."""
     init_store()
     with _conn() as c:
         d = c.execute("SELECT COUNT(*) FROM kb_document WHERE deleted_at IS NULL").fetchone()[0]
-        k = c.execute("SELECT COUNT(*) FROM kb_chunk").fetchone()[0]
+        k = c.execute(
+            "SELECT COUNT(*) FROM kb_chunk k JOIN kb_document d ON d.id=k.doc_id "
+            "WHERE d.deleted_at IS NULL"
+        ).fetchone()[0]
     return d, k

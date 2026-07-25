@@ -19,7 +19,10 @@ const { save } = useBoard()
 const { ok, err } = useToast()
 
 const streaming = computed(() => props.msg.status === 'streaming')
-const isNoData = computed(() => props.msg.intent !== 'chat' && /未查询到|没有找到|0条结果|不在覆盖|不在数据库|未检索到/.test(props.msg.insight || ''))
+const isNoData = computed(() => props.msg.intent !== 'chat' && (
+  !!props.msg.collection
+  || /未查询到|没有找到|暂无相关数据|0条结果|不在覆盖|不在数据库|未检索到/.test(props.msg.insight || '')
+))
 const isKnowledge = computed(() => props.msg.intent === 'rag' || props.msg.intent === 'chat' || props.msg.intent === 'clarify' || isNoData.value)
 const hasResult = computed(() => props.msg.sql || props.msg.rows.length || props.msg.insight || props.msg.citations.length)
 

@@ -67,7 +67,11 @@ async def upload(file: UploadFile = File(...), user: User = Depends(get_current_
 @router.get("/list")
 def kb_list(user: User = Depends(get_current_user)):
     """当前用户的文档 + 公共种子库（已过滤软删，含解析状态）。"""
-    return {"documents": store.list_documents(user.id)}
+    documents = store.list_documents(user.id)
+    for doc in documents:
+        owner = doc.get("user_id")
+        doc["is_public"] = owner is None or owner == 0
+    return {"documents": documents}
 
 
 @router.get("/{doc_id}")

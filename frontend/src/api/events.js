@@ -58,6 +58,9 @@ export function normalizeEvent(event, raw) {
       // 后端逐条推：一个事件 = 一条引用对象
       return { type: 'citation', citation: o }
 
+    case 'collection':
+      return { type: 'collection', taskId: o.task_id || '', status: o.status || 'queued' }
+
     case 'done':
       return { type: 'done', msgId: o.msg_id ?? null, conversationId: o.conversation_id ?? null, hasAnswer: o.has_answer ?? true }
 

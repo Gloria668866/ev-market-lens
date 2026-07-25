@@ -19,6 +19,30 @@ def _client():
 def test_health_ok():
     r = _client().get("/health")
     assert r.status_code == 200 and r.json().get("ok") is True
+    assert "ready" in r.json()
+    assert "services" in r.json()
+    assert r.json()["services"]["model_probe"] == "artifact"
+
+
+def test_deep_health_uses_real_model_probe():
+    with patch("app.main._deep_model_health", return_value=(False, False)) as probe:
+        r = _client().get("/health?deep=true")
+    probe.assert_called_once_with()
+    assert r.status_code == 200
+    assert r.json()["status"] == "degraded"
+    assert r.json()["services"]["embedding"] is False
+    assert r.json()["services"]["reranker"] is False
+    assert r.json()["services"]["model_probe"] == "inference"
+
+
+def test_model_artifact_check_rejects_truncated_safetensors(tmp_path):
+    from app.main import _model_artifact_available
+
+    model_dir = tmp_path / "broken-bge"
+    model_dir.mkdir()
+    (model_dir / "model.safetensors").write_bytes(b"truncated")
+
+    assert _model_artifact_available(str(model_dir)) is False
 
 
 def test_ask_requires_auth():
@@ -29,6 +53,41 @@ def test_ask_requires_auth():
 def test_history_requires_auth():
     r = _client().get("/api/history")
     assert r.status_code in (401, 403)
+
+
+def test_task_stream_isolated_between_users():
+    from app.agent_pipeline import _set_progress
+    from app.database import SessionLocal
+    from app.models import User
+    from sqlalchemy import select
+
+    client = _client()
+    owner_name = f"task_owner_{int(time.time() * 1000)}"
+    other_name = f"task_other_{int(time.time() * 1000)}"
+    for name in (owner_name, other_name):
+        client.post("/api/auth/register", json={
+            "username": name,
+            "password": "pw123456",
+        })
+    with SessionLocal() as db:
+        owner = db.scalar(select(User).where(User.username == owner_name))
+        owner_id = owner.id
+    other_token = client.post("/api/auth/login", json={
+        "username": other_name,
+        "password": "pw123456",
+    }).json()["access_token"]
+
+    task_id = f"private_task_{int(time.time() * 1000)}"
+    _set_progress(task_id, {
+        "stage": "queued",
+        "status": "pending",
+        "user_id": owner_id,
+    })
+    response = client.get(
+        f"/api/tasks/{task_id}/stream",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------- 禁用账号鉴权

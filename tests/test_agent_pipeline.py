@@ -94,6 +94,27 @@ def test_execute_tool_write_to_rag(monkeypatch):
     assert result["chunk_count"] == 5
 
 
+def test_execute_tool_write_to_rag_can_bind_private_owner(monkeypatch):
+    from app.agent_tools import execute_tool
+    from unittest.mock import MagicMock
+
+    mock_ingest = MagicMock(return_value=(43, 6))
+    monkeypatch.setattr("app.agent_tools.ingest_text_as_document", mock_ingest)
+
+    result = execute_tool("write_to_rag", {
+        "title": "Private collection",
+        "content": "collected content",
+        "source_url": "agent_pipeline_auto_collect",
+        "user_id": 7,
+        "public": False,
+    })
+
+    assert result["status"] == "success"
+    mock_ingest.assert_called_once()
+    assert mock_ingest.call_args.kwargs["user_id"] == 7
+    assert mock_ingest.call_args.kwargs["public"] is False
+
+
 # ── Pipeline DAG engine ───────────────────────────────────────────────────────
 
 def test_load_pipeline_config():
@@ -162,12 +183,93 @@ def test_redis_progress_write_read(monkeypatch):
     assert progress["stage"] == "research"
 
 
+def test_progress_falls_back_to_process_cache_without_redis(monkeypatch):
+    import app.agent_pipeline as ap
+    monkeypatch.setattr(ap, "_redis_client", lambda: None)
+    ap._set_progress("local_cache_task", {"stage": "queued", "status": "pending"})
+    assert ap._get_progress("local_cache_task") == {
+        "stage": "queued", "status": "pending"
+    }
+
+
+def test_progress_updates_preserve_task_owner(monkeypatch):
+    import app.agent_pipeline as ap
+    monkeypatch.setattr(ap, "_redis_client", lambda: None)
+
+    ap._set_progress("owner_task", {
+        "stage": "queued", "status": "pending", "user_id": 7,
+    })
+    ap._set_progress("owner_task", {
+        "stage": "research", "status": "running",
+    })
+
+    assert ap._get_progress("owner_task")["user_id"] == 7
+
+
+def test_enqueue_pipeline_uses_local_background_when_redis_is_down(monkeypatch):
+    import app.agent_pipeline as ap
+    submitted = []
+
+    class FakeExecutor:
+        def submit(self, fn, *args):
+            submitted.append((fn, args))
+
+    monkeypatch.setattr(ap, "_redis_available", lambda: False, raising=False)
+    monkeypatch.setattr(ap, "_local_executor", FakeExecutor(), raising=False)
+    monkeypatch.setattr(ap, "PIPELINE_LOCAL_FALLBACK", True, raising=False)
+
+    result = ap.enqueue_pipeline("task_local", "问题", 7)
+
+    assert result["accepted"] is True
+    assert result["mode"] == "local_background"
+    assert submitted and submitted[0][1] == ("task_local", "问题", 7)
+    assert ap._get_progress("task_local")["user_id"] == 7
+
+
 def test_run_pipeline_task_signature():
     from app.agent_pipeline import run_pipeline_task
     if run_pipeline_task is None:
         pytest.skip("Celery not installed")
     assert run_pipeline_task.name == "agent_pipeline.run"
     assert callable(run_pipeline_task.delay)
+
+
+def test_celery_wrapper_preserves_done_terminal_stage(monkeypatch):
+    import app.agent_pipeline as ap
+
+    if ap.run_pipeline_task is None:
+        pytest.skip("Celery not installed")
+    monkeypatch.setattr(ap, "_redis_client", lambda: None)
+    monkeypatch.setattr(ap, "run_pipeline", lambda *_: {
+        "status": "completed",
+        "final_answer": "采集完成",
+    })
+
+    result = ap.run_pipeline_task.run("celery_done_task", "问题", 7)
+    progress = ap._get_progress("celery_done_task")
+
+    assert result["status"] == "completed"
+    assert progress["stage"] == "done"
+    assert progress["status"] == "completed"
+    assert progress["user_id"] == 7
+
+
+def test_local_pipeline_config_failure_reaches_error_terminal_stage(monkeypatch):
+    import app.agent_pipeline as ap
+
+    monkeypatch.setattr(ap, "_redis_client", lambda: None)
+    monkeypatch.setattr(ap, "_load_pipeline_config", lambda force_reload=False: {
+        "stages": [],
+        "agents": {},
+    })
+
+    result = ap.run_pipeline("local_config_error", "问题", 7)
+    progress = ap._get_progress("local_config_error")
+
+    assert result["status"] == "failed"
+    assert progress["stage"] == "error"
+    assert progress["status"] == "failed"
+    assert progress["user_id"] == 7
 
 
 # ── Integration: full import chain works ──────────────────────────────────────

@@ -14,6 +14,8 @@ import json
 import logging
 import threading
 import time
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +26,7 @@ try:
 except ImportError:
     redis = None
 
-from .config import AGENTS_CONFIG_PATH, REDIS_URL
+from .config import AGENTS_CONFIG_PATH, PIPELINE_LOCAL_FALLBACK, REDIS_URL
 from .llm import chat, chat_with_tools
 
 _log = logging.getLogger("cheshijing.agent_pipeline")
@@ -103,6 +105,10 @@ def _topological_sort(stages: list) -> list:
 # ── Redis progress ────────────────────────────────────────────────────────────
 
 _redis_client_instance = None
+_progress_cache: OrderedDict[str, dict] = OrderedDict()
+_progress_cache_lock = threading.Lock()
+_PROGRESS_CACHE_MAX = 200
+_local_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pipeline-local")
 
 
 def _redis_client():
@@ -111,14 +117,41 @@ def _redis_client():
         if redis is None:
             return None
         try:
-            _redis_client_instance = redis.from_url(REDIS_URL, decode_responses=True)
+            _redis_client_instance = redis.from_url(
+                REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=0.35,
+                socket_timeout=0.5,
+                retry_on_timeout=False,
+            )
         except Exception:
             _redis_client_instance = None
     return _redis_client_instance
 
 
+def _redis_available() -> bool:
+    """Fast readiness probe used before Celery .delay(), avoiding broker retry stalls."""
+    global _redis_client_instance
+    r = _redis_client()
+    if r is None:
+        return False
+    try:
+        return bool(r.ping())
+    except Exception:
+        _redis_client_instance = None
+        return False
+
+
 def _set_progress(task_id: str, data: dict):
-    """Write pipeline progress to Redis. TTL matched to config."""
+    """Merge progress into process cache, then persist the complete snapshot."""
+    with _progress_cache_lock:
+        previous = _progress_cache.get(task_id) or {}
+        snapshot = {**previous, **data}
+        _progress_cache[task_id] = snapshot
+        _progress_cache.move_to_end(task_id)
+        while len(_progress_cache) > _PROGRESS_CACHE_MAX:
+            _progress_cache.popitem(last=False)
+
     r = _redis_client()
     if r is None:
         return
@@ -126,7 +159,7 @@ def _set_progress(task_id: str, data: dict):
         ttl = _load_pipeline_config().get("redis", {}).get("progress_ttl_seconds", 1800)
         r.set(
             f"pipeline:{task_id}:status",
-            json.dumps(data, ensure_ascii=False, default=str),
+            json.dumps(snapshot, ensure_ascii=False, default=str),
             ex=ttl,
         )
     except Exception:
@@ -134,15 +167,20 @@ def _set_progress(task_id: str, data: dict):
 
 
 def _get_progress(task_id: str) -> dict | None:
-    """Read pipeline progress from Redis."""
+    """Read Redis when available, otherwise the local development cache."""
     try:
         r = _redis_client()
-        raw = r.get(f"pipeline:{task_id}:status")
+        raw = r.get(f"pipeline:{task_id}:status") if r is not None else None
         if raw:
-            return json.loads(raw)
+            data = json.loads(raw)
+            with _progress_cache_lock:
+                _progress_cache[task_id] = data
+            return data
     except Exception:
         pass
-    return None
+    with _progress_cache_lock:
+        cached = _progress_cache.get(task_id)
+        return dict(cached) if cached is not None else None
 
 
 def get_progress(task_id: str) -> dict | None:
@@ -268,18 +306,37 @@ def run_pipeline(
 
     Returns: {"status": "completed|failed", "stages": {...}, "final_answer": "..."}
     """
-    _set_progress(task_id, {"stage": "start", "status": "running", "ts": time.time()})
+    _set_progress(task_id, {
+        "stage": "start",
+        "status": "running",
+        "user_id": original_user_id,
+        "ts": time.time(),
+    })
 
     cfg = _load_pipeline_config(force_reload=True)
     stages = cfg.get("stages", [])
     if not stages:
-        return {"status": "failed", "error": "No pipeline stages defined in agents.yaml"}
+        error = "No pipeline stages defined in agents.yaml"
+        _set_progress(task_id, {
+            "stage": "error",
+            "status": "failed",
+            "error": error,
+            "ts": time.time(),
+        })
+        return {"status": "failed", "error": error}
 
     # Topological sort
     try:
         ordered = _topological_sort(stages)
     except ValueError as e:
-        return {"status": "failed", "error": str(e)}
+        error = str(e)
+        _set_progress(task_id, {
+            "stage": "error",
+            "status": "failed",
+            "error": error,
+            "ts": time.time(),
+        })
+        return {"status": "failed", "error": error}
 
     # Execute stages in order, feeding each stage's output as context for downstream
     stage_outputs: dict[str, Any] = {}
@@ -349,6 +406,8 @@ def run_pipeline(
                 "title": rag_title,
                 "content": rag_content,
                 "source_url": "agent_pipeline_auto_collect",
+                "user_id": original_user_id,
+                "public": False,
             })
             _log.info("Auto-write to RAG: %s", rag_result.get("status"))
         except Exception as e:
@@ -381,14 +440,21 @@ try:
     def run_pipeline_task(self, task_id: str, original_question: str,
                           original_user_id: int = 0):
         """Celery task wrapper for run_pipeline. fire-and-forget with Redis progress."""
-        _set_progress(task_id, {"stage": "queued", "status": "pending", "ts": time.time()})
+        _set_progress(task_id, {
+            "stage": "queued",
+            "status": "pending",
+            "user_id": original_user_id,
+            "ts": time.time(),
+        })
 
         try:
             result = run_pipeline(task_id, original_question, original_user_id)
+            completed = result.get("status") == "completed"
             _set_progress(task_id, {
-                "stage": result.get("status", "done"),
-                "status": result.get("status", "failed"),
+                "stage": "done" if completed else "error",
+                "status": "completed" if completed else "failed",
                 "final_answer": result.get("final_answer", "")[:500],
+                "error": result.get("error", "")[:300],
                 "ts": time.time(),
             })
             return result
@@ -402,3 +468,59 @@ try:
 
 except ImportError:
     run_pipeline_task = None
+
+
+def enqueue_pipeline(
+    task_id: str, original_question: str, original_user_id: int = 0
+) -> dict:
+    """Queue collection without ever running the expensive pipeline in the request thread.
+
+    Production: Redis + Celery.
+    Local development: one bounded background worker with in-process progress cache.
+    """
+    _set_progress(task_id, {
+        "stage": "queued",
+        "status": "pending",
+        "user_id": original_user_id,
+        "ts": time.time(),
+    })
+
+    if run_pipeline_task is not None and _redis_available():
+        try:
+            run_pipeline_task.delay(
+                task_id=task_id,
+                original_question=original_question,
+                original_user_id=original_user_id,
+            )
+            return {"accepted": True, "mode": "celery", "task_id": task_id}
+        except Exception as exc:
+            _log.warning("Celery enqueue failed for %s: %s", task_id, exc)
+
+    if PIPELINE_LOCAL_FALLBACK:
+        try:
+            _local_executor.submit(
+                run_pipeline, task_id, original_question, original_user_id
+            )
+            return {
+                "accepted": True,
+                "mode": "local_background",
+                "task_id": task_id,
+            }
+        except Exception as exc:
+            _log.error("Local pipeline enqueue failed for %s: %s", task_id, exc)
+            error = str(exc)
+    else:
+        error = "Redis/Celery unavailable and local fallback is disabled"
+
+    _set_progress(task_id, {
+        "stage": "queue",
+        "status": "failed",
+        "error": error,
+        "ts": time.time(),
+    })
+    return {
+        "accepted": False,
+        "mode": "unavailable",
+        "task_id": task_id,
+        "error": error,
+    }

@@ -5,6 +5,7 @@ import { ref, computed, watch } from 'vue'
 import ChartCard from './ChartCard.vue'
 import { normalizeChartSpec, buildOptionByType, TYPE_LABEL } from '@/utils/chart.js'
 import { toCSV, downloadFile, downloadDataURL, copyText, exportName } from '@/utils/export.js'
+import { renderMarkdown } from '@/utils/markdown.js'
 
 const props = defineProps({
   msg: { type: Object, required: true },
@@ -33,6 +34,7 @@ const type = ref(null)
 watch(spec, (s) => { if (s && (type.value == null || !s.switchable.includes(type.value))) type.value = s.defaultType }, { immediate: true })
 
 const option = computed(() => spec.value && type.value ? buildOptionByType(type.value, props.msg.columns, props.msg.rows, spec.value) : null)
+const renderedInsight = computed(() => renderMarkdown(props.msg.insight || ''))
 </script>
 
 <template>
@@ -60,7 +62,7 @@ const option = computed(() => spec.value && type.value ? buildOptionByType(type.
         <span>结论与归因</span>
         <button class="copy" :class="{ ok: copied }" :title="copied ? '已复制' : '复制结论'" @click="copyInsight">{{ copied ? '✓ 已复制' : '复制' }}</button>
       </div>
-      <div class="insight-body"><span class="text">{{ msg.insight }}</span><span v-if="streaming" class="cursor"></span></div>
+      <div class="insight-body"><div class="markdown" v-html="renderedInsight"></div><span v-if="streaming" class="cursor"></span></div>
     </div>
 
     <details v-if="msg.sql && !streaming" class="disc">
@@ -96,6 +98,11 @@ const option = computed(() => spec.value && type.value ? buildOptionByType(type.
 .insight-head .copy:hover { color: var(--info); border-color: var(--info); }
 .insight-head .copy.ok { color: var(--up); border-color: var(--up); }
 .insight-body { font-size: 14.5px; color: var(--ink); line-height: 1.8; white-space: pre-wrap; }
+.insight-body .markdown { white-space: normal; }
+.insight-body .markdown :deep(p) { margin: 0 0 9px; }
+.insight-body .markdown :deep(p:last-child) { margin-bottom: 0; }
+.insight-body .markdown :deep(ul), .insight-body .markdown :deep(ol) { margin: 7px 0; padding-left: 21px; }
+.insight-body .markdown :deep(strong) { font-weight: 750; }
 .cursor { display: inline-block; width: 7px; height: 15px; background: var(--info); margin-left: 2px; vertical-align: -2px; animation: blink 1s step-start infinite; }
 
 .disc { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }

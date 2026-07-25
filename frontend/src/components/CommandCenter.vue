@@ -25,8 +25,8 @@ const COLS = [
 const KPIS = [
   { k: '覆盖车系', v: '409', d: '101 品牌', cls: 'up' },
   { k: '市场数据', v: '8,072', d: '条销量记录', cls: 'up' },
-  { k: '执行准确率', v: '78.3%', d: 'Text2SQL EX', cls: 'flat' },
-  { k: '防幻觉率', v: '100%', d: 'RAG 拒答', cls: 'flat' },
+  { k: '回归集通过率', v: '100%', d: 'Text2SQL · 60 题', cls: 'flat' },
+  { k: '意图准确率', v: '89.0%', d: '100 题评测', cls: 'flat' },
 ]
 </script>
 

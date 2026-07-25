@@ -1,8 +1,9 @@
 <script setup>
 // 知识问答脑：答案正文 + 来源引用卡（文档名 / 章节 heading_path / 页码，点开就地溯源）。
 // 引用结构对齐后端 §5.5：{doc_id, page_no, chunk_id, heading_path, title}。
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { copyText } from '@/utils/export.js'
+import { renderMarkdown } from '@/utils/markdown.js'
 const props = defineProps({
   msg: { type: Object, required: true },
   streaming: { type: Boolean, default: false },
@@ -16,6 +17,7 @@ async function copyAnswer() {
   if (await copyText(text)) { copied.value = true; setTimeout(() => { copied.value = false }, 1500) }
 }
 const openIdx = ref(-1)
+const rendered = computed(() => renderMarkdown(props.msg.insight || ''))
 function toggle(i) { openIdx.value = openIdx.value === i ? -1 : i }
 function pathParts(c) { return (c.heading_path || '').split(/\s*[>›/]\s*/).filter(Boolean) }
 </script>
@@ -23,10 +25,19 @@ function pathParts(c) { return (c.heading_path || '').split(/\s*[>›/]\s*/).fil
 <template>
   <div class="answer">
     <div class="ans-body">
-      <span class="text">{{ msg.insight }}</span><span v-if="streaming" class="cursor"></span>
+      <div class="markdown" v-html="rendered"></div><span v-if="streaming" class="cursor"></span>
       <button v-if="msg.insight && !streaming" class="copy" :class="{ ok: copied }" @click="copyAnswer">
         {{ copied ? '✓ 已复制（含来源）' : '复制答案' }}
       </button>
+    </div>
+
+    <div v-if="msg.collection" class="collection" :class="msg.collection.status">
+      <div class="collection-head">
+        <span class="pulse"></span>
+        <strong>智能采集任务</strong>
+        <code>{{ msg.collection.taskId.slice(0, 12) }}</code>
+      </div>
+      <div class="collection-stage">{{ msg.collection.stage }} · {{ msg.collection.message }}</div>
     </div>
 
     <div v-if="msg.citations && msg.citations.length" class="citations">
@@ -58,10 +69,24 @@ function pathParts(c) { return (c.heading_path || '').split(/\s*[>›/]\s*/).fil
 <style scoped>
 .answer { display: flex; flex-direction: column; gap: 18px; }
 .ans-body { font-size: 15px; line-height: 1.9; color: var(--ink); white-space: pre-wrap; }
+.markdown { white-space: normal; }
+.markdown :deep(p) { margin: 0 0 10px; }
+.markdown :deep(p:last-child) { margin-bottom: 0; }
+.markdown :deep(ul), .markdown :deep(ol) { margin: 8px 0; padding-left: 22px; }
+.markdown :deep(strong) { font-weight: 750; color: var(--ink); }
+.markdown :deep(code) { font-family: var(--font-mono); font-size: .9em; background: var(--bg-sunken); padding: 1px 5px; border-radius: 5px; }
 .ans-body .copy { display: block; margin-top: 12px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; transition: color .12s, border-color .12s; }
 .ans-body .copy:hover { color: var(--up); border-color: var(--up); }
 .ans-body .copy.ok { color: var(--up); border-color: var(--up); }
 .cursor { display: inline-block; width: 7px; height: 15px; background: var(--up); margin-left: 2px; vertical-align: -2px; animation: blink 1s step-start infinite; }
+
+.collection { border: 1px solid var(--line); border-radius: var(--r-md); padding: 11px 13px; background: var(--bg-subtle); }
+.collection-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.collection-head code { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+.collection-stage { margin: 6px 0 0 16px; font-size: 12px; color: var(--ink-3); }
+.collection .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--info); animation: skeletonPulse 1.2s infinite; }
+.collection.completed .pulse { background: var(--up); animation: none; }
+.collection.failed .pulse { background: var(--accent); animation: none; }
 
 .citations { border-top: 1px dashed var(--line-strong); padding-top: 14px; }
 .cite-head { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--up); letter-spacing: .1em; margin-bottom: 10px; text-transform: uppercase; }

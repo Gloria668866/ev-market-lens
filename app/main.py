@@ -15,6 +15,8 @@ import json
 import logging
 import secrets
 import threading
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +32,17 @@ from .database import get_db, init_db
 from .models import User, Conversation, Message, SavedInsight, SharedInsight
 from .memory import schedule_extraction, build_memory_block
 
-from .config import CORS_ALLOW_ORIGINS, JWT_SECRET, LLM_BASE_URL, LLM_MODEL
+from .config import (
+    CORS_ALLOW_ORIGINS,
+    EMBED_DIM,
+    EMBED_MODEL_NAME,
+    JWT_SECRET,
+    LLM_BASE_URL,
+    LLM_MODEL,
+    PIPELINE_LOCAL_FALLBACK,
+    RAG_BACKEND,
+    RERANK_MODEL_NAME,
+)
 
 logger = logging.getLogger("cheshijing")
 MAX_QUESTION_LEN = 2000     # 单次提问字符上限（防滥用/超长输入拖死 LLM）
@@ -72,7 +84,6 @@ except Exception as _e:  # noqa: BLE001
     logger.warning(f"RAG kb route not loaded (missing deps or PG not started): {_e}")
 
 
-@app.on_event("startup")
 def _startup():
     init_db()  # 幂等建应用层表 + 轻量迁移（补 users.role/disabled 列）
     # 确保有管理员账号（演示开箱即用；ADMIN_USERNAME/ADMIN_PASSWORD 可在 .env 配置）。
@@ -103,14 +114,105 @@ def _startup():
         logger.warning(f"LLM 配置可能不匹配：LLM_BASE_URL 指向 DashScope/通义，但 LLM_MODEL='{LLM_MODEL}'。请核对 .env。")
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _startup()
+    yield
+
+
+# FastAPI lifespan replaces deprecated @app.on_event("startup") while preserving
+# the existing router construction order.
+app.router.lifespan_context = _lifespan
+
+
 class Ask(BaseModel):
     question: str
     conversation_id: int | None = None  # 可选：续接已有会话；缺省则新建
 
 
+def _model_artifact_available(name: str) -> bool:
+    """Cheap local artifact validation without materializing model tensors.
+
+    A path-only check marked the previously truncated BGE file as healthy.
+    safetensors.safe_open validates the header and tensor offsets against the
+    file length, which catches that corruption while keeping the normal health
+    probe inexpensive.
+    """
+    if str(name).startswith(("BAAI/", "AI-ModelScope/")):
+        return True  # remote id; deep=true verifies the first real inference
+    model_file = Path(name) / "model.safetensors"
+    if not model_file.is_file():
+        return False
+    try:
+        from safetensors import safe_open
+        with safe_open(str(model_file), framework="pt", device="cpu") as handle:
+            return bool(list(handle.keys()))
+    except Exception:
+        logger.warning("Invalid model artifact: %s", model_file, exc_info=True)
+        return False
+
+
+def _deep_model_health() -> tuple[bool, bool]:
+    """Run one real embedding and reranking inference for startup readiness."""
+    try:
+        from .rag import embed
+        vector = embed.embed_query("新能源汽车市场健康检查")
+        embed_ok = vector is not None and len(vector) == EMBED_DIM
+    except Exception:
+        logger.warning("Deep health: embedding inference failed", exc_info=True)
+        embed_ok = False
+    try:
+        scores = embed.rerank_scores(
+            "新能源汽车市场健康检查",
+            ["新能源汽车市场健康检查"],
+        )
+        reranker_ok = bool(scores) and 0.0 <= float(scores[0]) <= 1.0
+    except Exception:
+        logger.warning("Deep health: reranker inference failed", exc_info=True)
+        reranker_ok = False
+    return embed_ok, reranker_ok
+
+
 @app.get("/health")
-def health():
-    return {"ok": True}
+def health(deep: bool = False):
+    """Liveness/readiness; ``deep=true`` performs one real model inference."""
+    analysis_db_ok = False
+    try:
+        with bi_engine.connect() as conn:
+            conn.execute(sql_text("SELECT 1"))
+        analysis_db_ok = True
+    except Exception:
+        logger.warning("Health probe: analysis database unavailable", exc_info=True)
+
+    try:
+        from .agent_pipeline import _redis_available
+        redis_ok = _redis_available()
+    except Exception:
+        redis_ok = False
+
+    embed_ok = _model_artifact_available(EMBED_MODEL_NAME)
+    reranker_ok = _model_artifact_available(RERANK_MODEL_NAME)
+    if deep and embed_ok and reranker_ok:
+        embed_ok, reranker_ok = _deep_model_health()
+
+    queue_mode = "celery" if redis_ok else (
+        "local_background" if PIPELINE_LOCAL_FALLBACK else "unavailable"
+    )
+    ready = analysis_db_ok and embed_ok and queue_mode != "unavailable"
+    return {
+        "ok": True,
+        "ready": ready,
+        "status": "healthy" if ready and reranker_ok else "degraded",
+        "services": {
+            "analysis_db": analysis_db_ok,
+            "rag_backend": RAG_BACKEND,
+            "embedding": embed_ok,
+            "reranker": reranker_ok,
+            "redis": redis_ok,
+            "collection_queue": queue_mode,
+            "model_probe": "inference" if deep else "artifact",
+        },
+    }
 
 
 # ---------------------------------------------------------------- 落库
@@ -284,6 +386,11 @@ async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = D
             if snap.get("chart") and "chart" not in emitted:
                 emitted.add("chart")
                 yield {"event": "chart", "data": json.dumps(snap["chart"], ensure_ascii=False)}
+            if snap.get("task_id") and "collection" not in emitted:
+                emitted.add("collection")
+                yield {"event": "collection", "data": json.dumps(
+                    {"task_id": snap["task_id"], "status": "queued"},
+                    ensure_ascii=False)}
             if snap.get("final_answer") and "insight" not in emitted:
                 emitted.add("insight")
                 for piece in _insight_pieces(snap.get("final_answer") or "（无内容）"):
@@ -329,6 +436,11 @@ async def task_stream(task_id: str, user: User = Depends(get_current_user)):
     import asyncio as _asyncio
     from .agent_pipeline import _get_progress as get_progress
 
+    initial = get_progress(task_id)
+    if initial is None or int(initial.get("user_id", -1)) != user.id:
+        # 404 avoids revealing whether another user's task id exists.
+        raise HTTPException(404, "任务不存在")
+
     async def gen():
         last_stage = None
         deadline = _asyncio.get_event_loop().time() + 180  # 3 min max
@@ -337,11 +449,15 @@ async def task_stream(task_id: str, user: User = Depends(get_current_user)):
         while _asyncio.get_event_loop().time() < deadline:
             progress = get_progress(task_id)
             if progress is None:
-                yield {"event": "stage", "data": json.dumps(
-                    {"stage": "queued", "status": "pending", "message": "任务已提交，等待执行…"},
+                yield {"event": "error", "data": json.dumps(
+                    {"message": "任务状态已过期", "task_id": task_id},
                     ensure_ascii=False)}
-                await _asyncio.sleep(poll_interval)
-                continue
+                return
+            if int(progress.get("user_id", -1)) != user.id:
+                yield {"event": "error", "data": json.dumps(
+                    {"message": "任务不可访问", "task_id": task_id},
+                    ensure_ascii=False)}
+                return
 
             stage = progress.get("stage", "unknown")
             status = progress.get("status", "unknown")
@@ -525,9 +641,19 @@ def prices(q: str = "", brand: str = "", sort: str = "price", order: str = "desc
         "FROM fact_price p JOIN dim_series s ON s.series_id=p.series_id JOIN dim_brand b ON b.brand_id=s.brand_id "
         f"WHERE {' AND '.join(where)} GROUP BY s.series_id ORDER BY {col} {direction} LIMIT :limit"
     )
+    count_sql = (
+        "SELECT COUNT(DISTINCT s.series_id) "
+        "FROM fact_price p JOIN dim_series s ON s.series_id=p.series_id "
+        "JOIN dim_brand b ON b.brand_id=s.brand_id "
+        f"WHERE {' AND '.join(where)}"
+    )
     with bi_engine.connect() as conn:
+        total = int(conn.execute(
+            sql_text(count_sql),
+            {k: v for k, v in params.items() if k != "limit"},
+        ).scalar_one())
         rows = [dict(r._mapping) for r in conn.execute(sql_text(sql), params)]
-    return {"count": len(rows), "items": [
+    return {"count": total, "returned": len(rows), "items": [
         {"brand": r["brand"], "series": r["series"], "segment": r["segment"], "endurance": r["endurance"],
          "min": r["pmin"], "max": r["pmax"], "priceText": r["price_text"], "descender": r["descender"] or 0}
         for r in rows]}

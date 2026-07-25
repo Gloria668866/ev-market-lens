@@ -28,7 +28,7 @@ function arrow(s) { return sort.value === s ? (order.value === 'asc' ? '↑' : '
       <header>
         <div>
           <h3>车型报价</h3>
-          <p class="sub">懂车帝实采指导价 · 共 {{ total }} 款车型</p>
+          <p class="sub">懂车帝实采指导价 · 共 {{ total }} 款车型<span v-if="items.length < total">，当前显示 {{ items.length }} 款</span></p>
         </div>
         <button class="x" @click="emit('close')">✕</button>
       </header>

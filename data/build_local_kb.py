@@ -30,7 +30,8 @@ def build():
         title = fp.stem
         try:
             doc_id, n = ingest_bytes(user_id=None, filename=fp.name, data=data,
-                                     file_type="md", title=title, public=True)
+                                     file_type="md", title=title, public=True,
+                                     source_uri=f"seed://{fp.name}")
             print(f"  ✅ {fp.name}  →  doc_id={doc_id}  {n} chunks")
         except Exception as e:
             print(f"  ❌ {fp.name}  →  {e}")
@@ -68,6 +69,8 @@ def export_corpus():
             "filename": doc["filename"],
             "title": doc.get("title") or doc["filename"],
             "file_type": doc.get("file_type", "md"),
+            "source_uri": doc.get("source_uri") or "",
+            "is_public": doc.get("user_id") is None,
             "status": doc.get("status", "ready"),
             "chunks": chunks,
         })
