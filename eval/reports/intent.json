@@ -1,14 +1,32 @@
 {
-  "n": 100,
-  "accuracy": 0.89,
-  "correct": 89,
+  "n": 110,
+  "accuracy": 1.0,
+  "correct": 110,
+  "few_shot_exact_overlap_count": 7,
+  "non_exact_overlap_n": 103,
+  "non_exact_overlap_correct": 103,
+  "non_exact_overlap_accuracy": 1.0,
+  "path_counts": {
+    "deterministic_hint": 107,
+    "greeting_precheck": 3
+  },
+  "nlu_llm_calls_total": 0,
+  "zero_llm_route_rate": 1.0,
+  "latency_ms": {
+    "mean": 0.08,
+    "p50": 0.06,
+    "p95": 0.16,
+    "max": 0.89
+  },
   "labels": [
     "sql",
     "rag",
     "hybrid",
+    "chat",
     "clarify"
   ],
   "pred_labels": [
+    "chat",
     "clarify",
     "hybrid",
     "rag",
@@ -16,24 +34,35 @@
   ],
   "confusion": {
     "sql": {
+      "chat": 0,
       "clarify": 0,
       "hybrid": 0,
       "rag": 0,
       "sql": 38
     },
     "rag": {
+      "chat": 0,
       "clarify": 0,
-      "hybrid": 2,
-      "rag": 25,
-      "sql": 7
+      "hybrid": 0,
+      "rag": 34,
+      "sql": 0
     },
     "hybrid": {
+      "chat": 0,
       "clarify": 0,
-      "hybrid": 14,
+      "hybrid": 16,
       "rag": 0,
-      "sql": 2
+      "sql": 0
+    },
+    "chat": {
+      "chat": 10,
+      "clarify": 0,
+      "hybrid": 0,
+      "rag": 0,
+      "sql": 0
     },
     "clarify": {
+      "chat": 0,
       "clarify": 12,
       "hybrid": 0,
       "rag": 0,
@@ -43,30 +72,39 @@
   "per_class": {
     "sql": {
       "tp": 38,
-      "fp": 9,
+      "fp": 0,
       "fn": 0,
       "support": 38,
-      "precision": 0.8085,
+      "precision": 1.0,
       "recall": 1.0,
-      "f1": 0.8941
+      "f1": 1.0
     },
     "rag": {
-      "tp": 25,
+      "tp": 34,
       "fp": 0,
-      "fn": 9,
+      "fn": 0,
       "support": 34,
       "precision": 1.0,
-      "recall": 0.7353,
-      "f1": 0.8475
+      "recall": 1.0,
+      "f1": 1.0
     },
     "hybrid": {
-      "tp": 14,
-      "fp": 2,
-      "fn": 2,
+      "tp": 16,
+      "fp": 0,
+      "fn": 0,
       "support": 16,
-      "precision": 0.875,
-      "recall": 0.875,
-      "f1": 0.875
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "chat": {
+      "tp": 10,
+      "fp": 0,
+      "fn": 0,
+      "support": 10,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
     },
     "clarify": {
       "tp": 12,
@@ -78,72 +116,13 @@
       "f1": 1.0
     }
   },
-  "errors": [
-    {
-      "id": "int-043",
-      "q": "截至2026年3月底全国充电桩有多少个",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-044",
-      "q": "五一期间高速公路新能源车充电了多少次",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-045",
-      "q": "2026年一季度我国汽车整车出口情况如何",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-049",
-      "q": "新能源汽车续航技术有哪些趋势",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-051",
-      "q": "报告对2025年销量总览是怎么说的",
-      "gold": "rag",
-      "pred": "hybrid"
-    },
-    {
-      "id": "int-052",
-      "q": "充电基础设施同比增长了多少",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-053",
-      "q": "800V高压平台是怎样的技术趋势",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-061",
-      "q": "报告对续航趋势的判断是什么",
-      "gold": "rag",
-      "pred": "hybrid"
-    },
-    {
-      "id": "int-072",
-      "q": "充电桩里公共和私人各占多少",
-      "gold": "rag",
-      "pred": "sql"
-    },
-    {
-      "id": "int-078",
-      "q": "纯电车续航现在到什么水平，销量靠前的有哪些",
-      "gold": "hybrid",
-      "pred": "sql"
-    },
-    {
-      "id": "int-084",
-      "q": "哪些品牌销量领先，它们各自有什么特征",
-      "gold": "hybrid",
-      "pred": "sql"
-    }
-  ]
+  "errors": [],
+  "_meta": {
+    "timestamp": "2026-07-29T15:07:38.341656+00:00",
+    "model": "deepseek-v4-flash",
+    "dataset_sha256": "e519008c1a46a6e1ab5e3dd727f69480eef494455120c912fca850a311b615f9",
+    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+    "dirty_worktree": false,
+    "config_sha256": "40463ce4c6be1634d5fe1caf473e18c40e9cfa7c9df6728f50643f45ff022b8d"
+  }
 }

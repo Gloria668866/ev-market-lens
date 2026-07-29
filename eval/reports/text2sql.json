@@ -7,14 +7,14 @@
   "first_correct": 59,
   "final_correct": 60,
   "meta": {
-    "timestamp": "2026-07-25T11:56:37.577165+00:00",
-    "git_commit": "acfc6d9f53f142c143025419ad4f4c4d71f7438c",
-    "dirty_worktree": true,
-    "dataset_sha256": "e8b786d930f31fefd16c065adcbca53c93c840221235552d003e7981eda42bb4",
+    "timestamp": "2026-07-29T15:14:09.728270+00:00",
+    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+    "dirty_worktree": false,
+    "dataset_sha256": "f4a954cdfe4b66500b56cbc243c8f3df3276bea664849cbf1db208512efaa1b9",
     "model": "deepseek-v4-flash",
     "provider": "unknown",
-    "config_sha256": "7f0e769e9b6f55589ae0f045831c4788a9c749484b9d9d58c0171bf741392427",
-    "fact_rows": 8072
+    "config_sha256": "337e413d4d62c2ce8364826dca436e7719989b3115c39496798a443bedeed786",
+    "fact_rows": 8402
   },
   "rows": [
     {
@@ -54,7 +54,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 3 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 5",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 3 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 5",
       "error": null
     },
     {
@@ -94,7 +94,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY b.brand_id, b.brand_name ORDER BY total_volume DESC LIMIT 1",
+      "pred_sql": "SELECT b.brand_name AS brand_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY b.brand_id, b.brand_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
@@ -104,7 +104,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 5 AND f.rank = 1 LIMIT 1",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 5 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
@@ -144,7 +144,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 1 GROUP BY s.series_id, s.series_name HAVING SUM(f.volume) > 150000 ORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id, s.series_name HAVING SUM(f.volume) > 150000 ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -164,7 +164,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month = 1 ORDER BY f.volume DESC LIMIT 5",
+      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2026 AND d.month = 1 AND f.new_energy_type = 1 ORDER BY f.volume DESC LIMIT 5",
       "error": null
     },
     {
@@ -214,7 +214,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%小鹏%' AND s.series_name LIKE '%MONA M03%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%小鹏%' AND s.series_name LIKE '%MONA M03%'\nLIMIT 200",
       "error": null
     },
     {
@@ -304,7 +304,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(*) AS series_count FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id HAVING SUM(f.volume) > 200000)\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(*) AS series_count FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id HAVING SUM(f.volume) > 200000) t\nLIMIT 200",
       "error": null
     },
     {
@@ -334,7 +334,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume ASC LIMIT 5",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 1 GROUP BY s.series_id, s.series_name ORDER BY total_volume ASC LIMIT 5",
       "error": null
     },
     {
@@ -344,7 +344,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%汉DM%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%汉DM%'\nLIMIT 200",
       "error": null
     },
     {
@@ -374,7 +374,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%AION Y%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%AION Y%'\nLIMIT 200",
       "error": null
     },
     {
@@ -384,7 +384,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 AND d.month = 6 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 10",
+      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 6 AND f.new_energy_type = 1 ORDER BY f.volume DESC LIMIT 10",
       "error": null
     },
     {
@@ -404,7 +404,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT DISTINCT s.series_name FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 3\nLIMIT 200",
+      "pred_sql": "SELECT DISTINCT s.series_name FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 3 ORDER BY s.series_name\nLIMIT 200",
       "error": null
     },
     {
@@ -434,7 +434,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(*) AS series_count FROM dim_series WHERE guide_price_min >= 30\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(*) AS series_count FROM dim_series s WHERE s.guide_price_min >= 30\nLIMIT 200",
       "error": null
     },
     {
@@ -454,7 +454,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT AVG(total_volume) FROM (SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id)\nLIMIT 200",
+      "pred_sql": "SELECT AVG(total_volume) AS avg_cumulative_volume FROM (SELECT s.series_id, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id)\nLIMIT 200",
       "error": null
     },
     {
@@ -484,7 +484,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%Model 3%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%Model 3%'\nLIMIT 200",
       "error": null
     },
     {
@@ -554,7 +554,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2026 AND d.month BETWEEN 1 AND 3 AND f.new_energy_type = 1\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month BETWEEN 1 AND 3\nLIMIT 200",
       "error": null
     },
     {
@@ -574,7 +574,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(DISTINCT s.series_id) AS cnt FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id ORDER BY SUM(f.volume) DESC LIMIT 10) top10 JOIN dim_series s ON s.series_id = top10.series_id WHERE s.powertrain = '增程'",
+      "pred_sql": "SELECT COUNT(*) AS cnt FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id ORDER BY SUM(f.volume) DESC LIMIT 10) AS top10 JOIN dim_series s ON s.series_id = top10.series_id WHERE s.powertrain = '增程'",
       "error": null
     },
     {
