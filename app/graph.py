@@ -583,6 +583,28 @@ def _validate_sql_shape(
         for label, (literal, code) in energy_requirements.items()
         if label in q
     ]
+    asks_overall_series_winner = (
+        "品牌" not in q
+        and any(token in q for token in ("销量第一", "销量最高", "卖得最多"))
+        and not mentioned_energy
+    )
+    if asks_overall_series_winner:
+        where_sql = str(tree.args.get("where") or "").lower()
+        if re.search(r"(?:\b\w+\.)?rank\s*=\s*1\b", where_sql):
+            return (
+                False,
+                "rank=1 只是能源类型分区冠军；未指定能源类型的销量冠军"
+                "必须按 volume 或 SUM(volume) 全局降序",
+            )
+        if tree.args.get("order") is None:
+            return False, "全市场销量冠军查询必须按销量降序"
+        limit_node = tree.args.get("limit")
+        try:
+            winner_limit = int(limit_node.expression.this) if limit_node else None
+        except (AttributeError, TypeError, ValueError):
+            winner_limit = None
+        if winner_limit != 1:
+            return False, "全市场销量冠军查询必须 LIMIT 1"
     # 单动力类型问题必须有精确过滤。多动力类型问题由下面的分组/多列规则
     # 约束，不能把合法的 IN (1,2,3) 误判成“缺少纯电过滤”。
     if len(mentioned_energy) == 1:

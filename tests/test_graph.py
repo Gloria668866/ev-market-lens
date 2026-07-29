@@ -400,6 +400,40 @@ def test_sql_shape_accepts_brand_winner_despite_cumulative_wording():
     assert ok is True, reason
 
 
+def test_sql_shape_rejects_partition_rank_for_overall_series_winner():
+    bad_sql = (
+        "SELECT s.series_name FROM fact_sales_rank f "
+        "JOIN dim_series s ON s.series_id=f.series_id "
+        "JOIN dim_date d ON d.date_id=f.date_id "
+        "WHERE d.year=2025 AND d.month=5 AND f.rank=1 LIMIT 1"
+    )
+    ok, reason = graph_module._validate_sql_shape(
+        "2025年5月销量第一的车系",
+        bad_sql,
+        ["series_name"],
+        [("海鸥",)],
+    )
+    assert ok is False
+    assert "分区冠军" in reason
+
+
+def test_sql_shape_accepts_volume_order_for_overall_series_winner():
+    good_sql = (
+        "SELECT s.series_name, f.volume FROM fact_sales_rank f "
+        "JOIN dim_series s ON s.series_id=f.series_id "
+        "JOIN dim_date d ON d.date_id=f.date_id "
+        "WHERE d.year=2025 AND d.month=5 "
+        "ORDER BY f.volume DESC LIMIT 1"
+    )
+    ok, reason = graph_module._validate_sql_shape(
+        "2025年5月销量第一的车系",
+        good_sql,
+        ["series_name", "volume"],
+        [("海鸥", 51400)],
+    )
+    assert ok is True, reason
+
+
 def test_sql_shape_rejects_splitting_complete_brand_into_parent_and_series(monkeypatch):
     monkeypatch.setattr(
         graph_module,
