@@ -1,4 +1,4 @@
-"""FastAPI 入口（接口清单见 PRD-2 §10；SSE 事件协议见 §9.1）：
+"""FastAPI 入口（架构与 SSE 事件协议见 docs/technical-design.md）：
 - /api/auth/register|login|me            鉴权（app/auth.py）
 - POST /api/ask        (SSE)             双脑问答，按 §9.1 推 intent/sql/rows/chart/insight/citation/done/error
 - POST /api/ask_sync                     同步返回完整结果（调试）
@@ -15,10 +15,12 @@ import json
 import logging
 import secrets
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text as sql_text
@@ -27,27 +29,38 @@ from sse_starlette.sse import EventSourceResponse
 
 from .graph import run_agent, stream_agent
 from .db import engine as bi_engine          # 只读分析库（车型报价直接查）
-from .auth import router as auth_router, get_current_user
-from .database import get_db, init_db
-from .models import User, Conversation, Message, SavedInsight, SharedInsight
+from .auth import router as auth_router, get_current_user, get_current_user_detached
+from .database import SessionLocal, app_engine, get_db, init_db
+from .models import User, Conversation, Message, SavedInsight, SharedInsight, MemoryEpisode
 from .memory import schedule_extraction, build_memory_block
+from .capacity import ASK_SLOTS as _ASK_SLOTS
+from .usage_limits import (
+    enforce_request_interval,
+    reserve_question_slot,
+    validate_question,
+)
 
 from .config import (
     CORS_ALLOW_ORIGINS,
+    DAILY_QUESTION_LIMIT,
+    ASK_MAX_CONCURRENCY,
     EMBED_DIM,
     EMBED_MODEL_NAME,
     JWT_SECRET,
+    LLM_API_KEY,
     LLM_BASE_URL,
     LLM_MODEL,
     PIPELINE_LOCAL_FALLBACK,
     RAG_BACKEND,
     RERANK_MODEL_NAME,
+    IS_PRODUCTION,
 )
 
 logger = logging.getLogger("cheshijing")
-MAX_QUESTION_LEN = 2000     # 单次提问字符上限（防滥用/超长输入拖死 LLM）
-MIN_QUESTION_LEN = 1
-_user_last_call: dict[int, float] = {}   # user_id → 上次调用时间戳（速率限制）
+_ASK_EXECUTOR = ThreadPoolExecutor(
+    max_workers=ASK_MAX_CONCURRENCY,
+    thread_name_prefix="agent-ask",
+)
 
 
 def _run_agent_worker(question: str, user_id: int, history: list,
@@ -76,15 +89,33 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ALLOW_ORIGINS,
 app.include_router(auth_router)
 from .admin import router as admin_router          # 管理员后台（用户管理）
 app.include_router(admin_router)
-# RAG 知识库路由（上传/列表/删除/问答）。延迟导入避免无 RAG 依赖时启动失败。
+# RAG 知识库路由（上传/列表/删除/问答）。
+# 生产或显式选择 PG 后端时，导入失败必须阻止启动；否则会出现 /ready 假健康但核心接口 404。
+KB_ROUTER_LOADED = False
 try:
     from .kb import router as kb_router
     app.include_router(kb_router)
+    KB_ROUTER_LOADED = True
 except Exception as _e:  # noqa: BLE001
+    if IS_PRODUCTION or RAG_BACKEND == "pg":
+        raise RuntimeError("RAG kb route failed to load in required mode") from _e
     logger.warning(f"RAG kb route not loaded (missing deps or PG not started): {_e}")
 
 
 def _startup():
+    import os as _os
+    _env = _os.getenv("APP_ENV", "development").lower()
+    _is_prod = _env in ("production", "prod")
+    _admin_password = _os.getenv("ADMIN_PASSWORD", "admin123")
+    if _is_prod and not _configured_secret_ready(_admin_password, min_length=12):
+        raise SystemExit("❌ 生产环境 ADMIN_PASSWORD 为空、过短或仍是公开占位值")
+    if not _configured_secret_ready(JWT_SECRET, min_length=32):
+        if _is_prod:
+            raise SystemExit("❌ 生产环境 JWT_SECRET 为空、过短或仍是公开占位值")
+        logger.warning("JWT_SECRET 仍是默认弱密钥！上线/演示前务必设置随机强密钥")
+    if _is_prod and not _llm_config_ready():
+        raise SystemExit("❌ 生产环境缺少有效 LLM_API_KEY，或仍在使用 REPLACE 占位值")
+
     init_db()  # 幂等建应用层表 + 轻量迁移（补 users.role/disabled 列）
     # 确保有管理员账号（演示开箱即用；ADMIN_USERNAME/ADMIN_PASSWORD 可在 .env 配置）。
     from .auth import bootstrap_admin
@@ -95,16 +126,8 @@ def _startup():
         logger.info(f"[admin] 管理员账号 '{uname}': {action}")
     finally:
         _db.close()
-    import os as _os
-    _env = _os.getenv("APP_ENV", "development").lower()
-    _is_prod = _env in ("production", "prod")
-    if _os.getenv("ADMIN_PASSWORD", "admin123") == "admin123":
+    if _admin_password == "admin123":
         logger.warning("管理员默认密码仍是 admin123！上线/公开演示前请在 .env 设置 ADMIN_PASSWORD。")
-    # P1 FIX: 生产环境弱密钥直接拒绝启动，而不是仅 warning
-    if JWT_SECRET == "dev-insecure-change-me":
-        if _is_prod:
-            raise SystemExit("❌ 生产环境不允许使用默认 JWT_SECRET！请在 .env 设置强密钥（openssl rand -hex 32）")
-        logger.warning("JWT_SECRET 仍是默认弱密钥！上线/演示前务必在 .env 设置随机强密钥（如 openssl rand -hex 32）")
     # 配置自检：base_url 与 model 跨厂商不一致 = 静默连错 API（O7：qwen 默认值 + deepseek base 的坑）。
     _base, _model = LLM_BASE_URL.lower(), LLM_MODEL.lower()
     _provider = next((p for p in ("deepseek", "dashscope", "moonshot", "openai", "siliconflow") if p in _base), None)
@@ -173,16 +196,175 @@ def _deep_model_health() -> tuple[bool, bool]:
     return embed_ok, reranker_ok
 
 
-@app.get("/health")
-def health(deep: bool = False):
-    """Liveness/readiness; ``deep=true`` performs one real model inference."""
+_deep_health_cache_lock = threading.Lock()
+_deep_health_cache: tuple[float, tuple[bool, bool]] | None = None
+_DEEP_HEALTH_TTL_SECONDS = 300
+
+
+def _cached_deep_model_health() -> tuple[bool, bool]:
+    """Bound anonymous deep probes to one real inference per five minutes/process."""
+    global _deep_health_cache
+    import time
+
+    now = time.monotonic()
+    with _deep_health_cache_lock:
+        if (
+            _deep_health_cache is not None
+            and now - _deep_health_cache[0] < _DEEP_HEALTH_TTL_SECONDS
+        ):
+            return _deep_health_cache[1]
+        result = _deep_model_health()
+        _deep_health_cache = (now, result)
+        return result
+
+
+def _llm_config_ready(api_key: str | None = None) -> bool:
+    """Reject empty/template credentials without making a paid provider request."""
+    value = (LLM_API_KEY if api_key is None else api_key).strip()
+    if not value:
+        return False
+    lowered = value.lower()
+    return not any(marker in lowered for marker in ("replace", "changeme", "your_provider_key"))
+
+
+def _configured_secret_ready(value: str | None, min_length: int) -> bool:
+    candidate = (value or "").strip()
+    if len(candidate) < min_length:
+        return False
+    lowered = candidate.lower()
+    return not any(
+        marker in lowered
+        for marker in ("replace", "changeme", "change_me", "insecure", "admin123")
+    )
+
+
+def _health_payload(deep: bool = False) -> dict:
+    """Collect dependency readiness; ``deep=true`` performs real model inference."""
     analysis_db_ok = False
     try:
         with bi_engine.connect() as conn:
             conn.execute(sql_text("SELECT 1"))
+            conn.execute(sql_text(
+                "SELECT brand_id, brand_name FROM dim_brand LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT series_id, brand_id, series_name FROM dim_series LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT date_id, year, month FROM dim_date LIMIT 0"
+            ))
+            sales_probe = conn.execute(sql_text(
+                "SELECT series_id, date_id, volume FROM fact_sales_rank LIMIT 1"
+            ))
+            if sales_probe.first() is None:
+                raise RuntimeError("fact_sales_rank is empty")
+            conn.execute(sql_text(
+                "SELECT series_id, date_id, guide_price_min FROM fact_price LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT series_id, date_id, score FROM fact_review LIMIT 0"
+            ))
         analysis_db_ok = True
     except Exception:
         logger.warning("Health probe: analysis database unavailable", exc_info=True)
+
+    app_db_ok = False
+    try:
+        with app_engine.connect() as conn:
+            conn.execute(sql_text("SELECT 1"))
+            conn.execute(sql_text(
+                "SELECT id, username, role, disabled, token_version "
+                "FROM users LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT id, user_id FROM conversation LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT id, conversation_id, user_id, result_meta "
+                "FROM message LIMIT 0"
+            ))
+            conn.execute(sql_text(
+                "SELECT id, user_id, conversation_id FROM memory_episode LIMIT 0"
+            ))
+        app_db_ok = True
+    except Exception:
+        logger.warning("Health probe: application database unavailable", exc_info=True)
+
+    rag_store_ok = True
+    object_store_ok = True
+    embedding_store_compatible = True
+    embedding_store_stats: dict = {}
+    if RAG_BACKEND == "pg":
+        try:
+            from .rag import pg
+            with pg.conn() as conn:
+                conn.execute("SELECT 1")
+                conn.execute(
+                    "SELECT id, user_id, status FROM kb_document LIMIT 0"
+                )
+                conn.execute(
+                    "SELECT chunk_id, doc_id, user_id, embedding, "
+                    "embedding_model_version, embedding_dim "
+                    "FROM kb_chunk LIMIT 0"
+                )
+                conn.execute("SELECT '[0,0]'::vector <=> '[0,0]'::vector")
+            embedding_store_stats = pg.embedding_compatibility_stats()
+            embedding_store_compatible = (
+                embedding_store_stats.get("column_dim") == EMBED_DIM
+                and embedding_store_stats.get("compatible", 0)
+                == embedding_store_stats.get("retrievable", 0)
+                and embedding_store_stats.get("missing", 0) == 0
+                and embedding_store_stats.get("legacy", 0) == 0
+                and embedding_store_stats.get("mismatched", 0) == 0
+            )
+        except Exception:
+            rag_store_ok = False
+            embedding_store_compatible = False
+            logger.warning("Health probe: pgvector store unavailable", exc_info=True)
+        try:
+            from .rag import store
+            object_store_ok = store.client().bucket_exists(store.MINIO_BUCKET_UPLOADS)
+        except Exception:
+            object_store_ok = False
+            logger.warning("Health probe: object store unavailable", exc_info=True)
+    else:
+        try:
+            from .rag import local_store
+            embedding_store_stats = local_store.embedding_compatibility_stats()
+            embedding_store_compatible = (
+                embedding_store_stats.get("compatible", 0)
+                == embedding_store_stats.get("retrievable", 0)
+                and embedding_store_stats.get("missing", 0) == 0
+                and embedding_store_stats.get("legacy", 0) == 0
+                and embedding_store_stats.get("mismatched", 0) == 0
+            )
+        except Exception:
+            rag_store_ok = False
+            embedding_store_compatible = False
+            logger.warning(
+                "Health probe: local RAG store unavailable",
+                exc_info=True,
+            )
+
+    try:
+        from .agent_tools import search_provider_status
+
+        web_search_status = search_provider_status()
+        web_search_official_api = bool(
+            web_search_status.get("official_api_ready")
+        )
+    except Exception:
+        web_search_status = {
+            "official_api_ready": False,
+            "mode": "status_unavailable",
+            "error": "search provider status unavailable",
+        }
+        web_search_official_api = False
+        logger.warning("Health probe: search provider status unavailable", exc_info=True)
+    # Local development may intentionally exercise the HTML fallback without
+    # buying an API key. Production must not advertise the unreliable fallback
+    # as a ready research capability.
+    web_search_ready = web_search_official_api or not IS_PRODUCTION
 
     try:
         from .agent_pipeline import _redis_available
@@ -192,20 +374,46 @@ def health(deep: bool = False):
 
     embed_ok = _model_artifact_available(EMBED_MODEL_NAME)
     reranker_ok = _model_artifact_available(RERANK_MODEL_NAME)
+    llm_config_ok = _llm_config_ready()
     if deep and embed_ok and reranker_ok:
-        embed_ok, reranker_ok = _deep_model_health()
+        embed_ok, reranker_ok = _cached_deep_model_health()
 
     queue_mode = "celery" if redis_ok else (
         "local_background" if PIPELINE_LOCAL_FALLBACK else "unavailable"
     )
-    ready = analysis_db_ok and embed_ok and queue_mode != "unavailable"
+    ready = (
+        analysis_db_ok
+        and app_db_ok
+        and KB_ROUTER_LOADED
+        and rag_store_ok
+        and embedding_store_compatible
+        and object_store_ok
+        and web_search_ready
+        and llm_config_ok
+        and embed_ok
+        and queue_mode != "unavailable"
+    )
     return {
         "ok": True,
         "ready": ready,
         "status": "healthy" if ready and reranker_ok else "degraded",
         "services": {
             "analysis_db": analysis_db_ok,
+            "application_db": app_db_ok,
+            "kb_router": KB_ROUTER_LOADED,
             "rag_backend": RAG_BACKEND,
+            "rag_store": rag_store_ok,
+            "embedding_store_compatible": embedding_store_compatible,
+            "embedding_store": embedding_store_stats,
+            "reindex_required": (
+                embedding_store_stats.get("missing", 0)
+                + embedding_store_stats.get("legacy", 0)
+                + embedding_store_stats.get("mismatched", 0)
+            ) > 0,
+            "object_store": object_store_ok,
+            "web_search_official_api": web_search_official_api,
+            "web_search": web_search_status,
+            "llm_config": llm_config_ok,
             "embedding": embed_ok,
             "reranker": reranker_ok,
             "redis": redis_ok,
@@ -215,6 +423,20 @@ def health(deep: bool = False):
     }
 
 
+@app.get("/health")
+def health(deep: bool = False):
+    """Liveness/diagnostics endpoint; always responds so operators can inspect failures."""
+    return _health_payload(deep)
+
+
+@app.get("/ready")
+def readiness(deep: bool = False):
+    """Readiness endpoint: return 503 unless every required dependency is healthy."""
+    payload = _health_payload(deep)
+    status_code = 200 if payload["ready"] and payload["status"] == "healthy" else 503
+    return JSONResponse(status_code=status_code, content=payload)
+
+
 # ---------------------------------------------------------------- 落库
 def _row_arrays(state) -> list:
     """结果集 dict 行 → 按列序的数组行（§9.1 rows 事件要数组）。"""
@@ -222,29 +444,60 @@ def _row_arrays(state) -> list:
     return [[r.get(c) for c in cols] for r in (state.get("rows") or [])]
 
 
-def _persist(db: Session, user: User, question: str, state: dict,
-             conversation_id: int | None) -> tuple[int, int]:
-    """把一轮问答落库到当前用户名下；assistant 消息存 result_meta（图表/列行/引用），供历史还原。"""
-    conv = None
-    if conversation_id is not None:
-        conv = db.get(Conversation, conversation_id)
-        if conv is None or conv.user_id != user.id:    # 只能续接自己的会话
-            conv = None
-    if conv is None:
-        conv = Conversation(user_id=user.id, title=question[:40])
-        db.add(conv)
-        db.flush()
-    db.add(Message(conversation_id=conv.id, user_id=user.id, role="user", content=question))
+_PERSISTED_TRACE_FIELDS = frozenset({
+    "node",
+    "intent",
+    "path",
+    "confidence",
+    "nlu_source",
+    "nlu_latency_ms",
+    "nlu_llm_calls",
+    "llm_classified",
+    "attempt",
+    "valid",
+    "reason",
+    "error",
+    "degraded",
+    "has_evidence",
+    "evidence_count",
+    "duration_ms",
+})
+
+
+def _trace_for_history(trace: list[dict]) -> list[dict]:
+    """Keep diagnostic decisions without persisting prompts, rows or payloads."""
+    return [
+        {
+            key: value
+            for key, value in item.items()
+            if key in _PERSISTED_TRACE_FIELDS
+        }
+        for item in trace
+        if isinstance(item, dict)
+    ]
+
+
+def _persist_answer(
+    db: Session,
+    user_id: int,
+    state: dict,
+    conversation_id: int,
+) -> tuple[int, int]:
+    """Append the assistant result to a previously reserved user question."""
+    conv = db.get(Conversation, conversation_id)
+    if conv is None or conv.user_id != user_id:
+        raise RuntimeError("reserved conversation is missing or belongs to another user")
     meta = {
         "columns": state.get("cols") or [],
         "rows": _row_arrays(state),
         "chart": state.get("chart"),
         "citations": state.get("citations") or [],
         "intent": state.get("intent"),
-        "trace": [t.get("node") for t in (state.get("trace") or [])],
+        "trace": _trace_for_history(state.get("trace") or []),
+        "task_id": state.get("task_id"),
     }
     assistant = Message(
-        conversation_id=conv.id, user_id=user.id, role="assistant",
+        conversation_id=conv.id, user_id=user_id, role="assistant",
         content=(state.get("final_answer") or "")[:4000],
         intent=state.get("intent"), sql_text=state.get("sql"),
         result_meta=json.dumps(meta, ensure_ascii=False, default=str),
@@ -252,39 +505,70 @@ def _persist(db: Session, user: User, question: str, state: dict,
     db.add(assistant)
     db.commit()
 
+    if state.get("task_id"):
+        from .agent_pipeline import link_task_message
+        link_task_message(
+            state["task_id"],
+            user_id=user_id,
+            conversation_id=conv.id,
+            assistant_message_id=assistant.id,
+        )
+
     # 有条件调度后台记忆提取（有界线程池、进程内去重）
     msg_count = db.query(Message).filter_by(conversation_id=conv.id).count()
-    schedule_extraction(user.id, conv.id, msg_count)
+    schedule_extraction(user_id, conv.id, msg_count)
 
     return conv.id, assistant.id
 
 
 # ---------------------------------------------------------------- 问答
 @app.post("/api/ask_sync")
-def ask_sync(body: Ask, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def ask_sync(body: Ask, user: User = Depends(get_current_user_detached)):
     """同步返回完整结果（调试用）。"""
-    if not body.question or not body.question.strip():
-        raise HTTPException(400, "问题不能为空")
-    if len(body.question) > MAX_QUESTION_LEN:
-        raise HTTPException(400, f"问题过长，请控制在{MAX_QUESTION_LEN}字符以内")
-    history = _load_history(db, user, body.conversation_id)
-    # 注入长期记忆到上下文（fail-open：异常时跳过，不影响主流程）
+    question = validate_question(body.question)
+    enforce_request_interval(user.id)
+    if not _ASK_SLOTS.acquire(blocking=False):
+        raise HTTPException(
+            503,
+            f"当前分析任务已满（最多 {ASK_MAX_CONCURRENCY} 个并发），请稍后重试",
+        )
     try:
-        mem_block = build_memory_block(db, user.id, body.question)
-        if mem_block:
-            history = [{"role": "system", "content": mem_block}] + history
-    except Exception:
-        pass
-    state = run_agent(body.question, user.id, history=history)
-    conv_id, msg_id = _persist(db, user, body.question, state, body.conversation_id)
-    return {
-        "intent": state.get("intent"), "sql": state.get("sql"),
-        "columns": state.get("cols") or [], "rows": _row_arrays(state),
-        "chart": state.get("chart"), "answer": state.get("final_answer"),
-        "citations": state.get("citations") or [], "has_answer": state.get("has_answer", True),
-        "conversation_id": conv_id, "msg_id": msg_id,
-        "trace": [t.get("node") for t in (state.get("trace") or [])],
-    }
+        # Keep application DB sessions shorter than the potentially slow Agent
+        # run, exactly as the SSE path does.
+        with SessionLocal() as setup_db:
+            history = _load_history(setup_db, user, body.conversation_id)
+            conv_id, _ = reserve_question_slot(
+                setup_db,
+                user.id,
+                question,
+                body.conversation_id,
+                limit=DAILY_QUESTION_LIMIT,
+            )
+            try:
+                mem_block = build_memory_block(setup_db, user.id, question)
+                if mem_block:
+                    history = [{"role": "system", "content": mem_block}] + history
+            except Exception:
+                pass
+
+        state = run_agent(question, user.id, history=history)
+        with SessionLocal() as persist_db:
+            conv_id, msg_id = _persist_answer(
+                persist_db,
+                user.id,
+                state,
+                conv_id,
+            )
+        return {
+            "intent": state.get("intent"), "sql": state.get("sql"),
+            "columns": state.get("cols") or [], "rows": _row_arrays(state),
+            "chart": state.get("chart"), "answer": state.get("final_answer"),
+            "citations": state.get("citations") or [], "has_answer": state.get("has_answer", True),
+            "conversation_id": conv_id, "msg_id": msg_id,
+            "trace": [t.get("node") for t in (state.get("trace") or [])],
+        }
+    finally:
+        _ASK_SLOTS.release()
 
 
 def _insight_pieces(text: str, n: int = 24):
@@ -307,47 +591,78 @@ def _load_history(db: Session, user: User, conversation_id: int | None, limit: i
 
 
 @app.post("/api/ask")
-async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def ask(body: Ask, user: User = Depends(get_current_user_detached)):
     """SSE（§9.1）：stage(accepted) → intent → [sql] → [rows] → [chart] → insight(逐段 delta) → [citation...] → done。
     **渐进推送**：用 LangGraph 流式跑图，某节点一完成、对应字段一出现就立刻推事件（不再等整图跑完一次性全出）。
     纯 RAG 无 sql/rows/chart，只有 insight(答案)+citation；出错推 error。"""
-    history = _load_history(db, user, body.conversation_id)  # O3 多轮上下文
-    # 注入长期记忆（fail-open：异常时跳过，不影响主流程）
+    # 在构建记忆块和启动 worker 前拒绝无效/超额请求，避免恶意长输入先消耗
+    # embedding/数据库资源。HTTP 4xx 也比“200 后再推 SSE error”更便于网关计量。
+    question = validate_question(body.question)
+    enforce_request_interval(user.id)
+
+    if not _ASK_SLOTS.acquire(blocking=False):
+        raise HTTPException(
+            503,
+            f"当前分析任务已满（最多 {ASK_MAX_CONCURRENCY} 个并发），请稍后重试",
+        )
+
     try:
-        mem_block = build_memory_block(db, user.id, body.question)
-        if mem_block:
-            history = [{"role": "system", "content": mem_block}] + history
+        # All application-DB work finishes before EventSourceResponse is
+        # returned.  No SQLAlchemy Session is retained by the long-lived stream.
+        with SessionLocal() as setup_db:
+            history = _load_history(setup_db, user, body.conversation_id)
+            conv_id, _ = reserve_question_slot(
+                setup_db,
+                user.id,
+                question,
+                body.conversation_id,
+                limit=DAILY_QUESTION_LIMIT,
+            )
+            try:
+                mem_block = build_memory_block(setup_db, user.id, question)
+                if mem_block:
+                    history = [{"role": "system", "content": mem_block}] + history
+            except Exception:
+                pass
     except Exception:
-        pass
+        _ASK_SLOTS.release()
+        raise
+
+    q: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    stop_event = threading.Event()
+
+    def _async_put(item):
+        try:
+            loop.call_soon_threadsafe(q.put_nowait, item)
+        except RuntimeError:
+            # Event loop already closed after disconnect/shutdown.
+            return
+
+    def _bounded_worker():
+        try:
+            _run_agent_worker(
+                question,
+                user.id,
+                history,
+                _async_put,
+                stop_event,
+            )
+        finally:
+            _ASK_SLOTS.release()
+
+    try:
+        _ASK_EXECUTOR.submit(_bounded_worker)
+    except Exception:
+        _ASK_SLOTS.release()
+        raise HTTPException(503, "分析线程池暂不可用，请稍后重试")
 
     async def gen():
-        # 速率限制：按 user.id 追踪上次调用时间，0.5s 内重复请求拒绝
-        import time as _time
-        _now = _time.time()
-        if _now - _user_last_call.get(user.id, 0) < 0.5:
-            yield {"event": "error", "data": json.dumps({"code": "RATE_LIMITED", "message": "请稍后再试，间隔 0.5 秒"}, ensure_ascii=False)}
-            return
-        _user_last_call[user.id] = _now
-        if not body.question or not body.question.strip():
-            yield {"event": "error", "data": json.dumps({"code": "EMPTY", "message": "问题不能为空"}, ensure_ascii=False)}
-            return
         yield {"event": "stage", "data": json.dumps(
             {"stage": "accepted", "message": "已接收，正在分析问题…"}, ensure_ascii=False)}
 
-        # 同步流式图丢到工作线程跑，用线程安全队列把每个「累积 State 快照」桥接回事件循环。
-        q: asyncio.Queue = asyncio.Queue(); _last_intent = None
-        loop = asyncio.get_running_loop()
-        _stop = threading.Event()
-
-        def _async_put(item):
-            loop.call_soon_threadsafe(q.put_nowait, item)
-
-        threading.Thread(
-            target=_run_agent_worker,
-            args=(body.question, user.id, history, _async_put, _stop),
-            daemon=True,
-        ).start()
-
+        # 有界线程池中的同步 LangGraph 通过线程安全队列桥接回事件循环。
+        _last_intent = None
         emitted: set = set()
         final: dict = {}
         err = None
@@ -402,25 +717,29 @@ async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = D
                     yield {"event": "citation", "data": json.dumps(c, ensure_ascii=False, default=str)}
 
         finally:
-            _stop.set()   # 客户端断连（GeneratorExit）或正常结束，均通知 worker 停止
+            stop_event.set()   # 客户端断连或正常结束，通知 worker 尽快停止
 
         if err is not None:
             yield {"event": "error", "data": json.dumps(
                 {"code": "AGENT_ERROR", "message": "处理失败，请换种问法或缩小范围。"}, ensure_ascii=False)}
-            logger.error(f"[ask] stream_agent 失败 user={user.id} q={body.question[:80]!r}: {err}",
+            logger.error(f"[ask] stream_agent 失败 user={user.id} q={question[:80]!r}: {err}",
                          exc_info=err)
             return
 
-        # 落库（拿到完整最终 State 后）
-        # P1 NOTE: GeneratorExit（断连）发生在 yield 时，finally 之后的代码不执行，
-        # 故断连时本行不运行。如需断连也落库，可在 finally 中加 try/_persist，
-        # 但需要额外状态跟踪（conv_id、is_persisted flag）。当前 trade-off：
-        # 断连丢失本轮数据 vs 代码复杂度 + 可能重复写入，选前者（历史显示已有数据）。
-        conv_id, msg_id = _persist(db, user, body.question, final, body.conversation_id)
+        # 用户问题已在启动模型前原子预扣并落库；这里用新的短 Session 只追加
+        # assistant 结果。若客户端中途断连，问题仍计入配额，避免断连绕过成本保护；
+        # 尚未完成的 assistant 不伪造写入。
+        with SessionLocal() as persist_db:
+            conv_id_done, msg_id = _persist_answer(
+                persist_db,
+                user.id,
+                final,
+                conv_id,
+            )
         if "insight" not in emitted:  # 极端兜底：没有任何 final_answer 也让前端正常结束
             yield {"event": "insight", "data": json.dumps({"delta": "（无内容）"}, ensure_ascii=False)}
         yield {"event": "done", "data": json.dumps(
-            {"msg_id": msg_id, "conversation_id": conv_id, "has_answer": final.get("has_answer", True), "intent": final.get("intent")},
+            {"msg_id": msg_id, "conversation_id": conv_id_done, "has_answer": final.get("has_answer", True), "intent": final.get("intent")},
             ensure_ascii=False)}
 
     return EventSourceResponse(gen(), ping=15)
@@ -428,7 +747,7 @@ async def ask(body: Ask, user: User = Depends(get_current_user), db: Session = D
 
 # ---------------------------------------------------------------- oh-my-openagent 进度
 @app.get("/api/tasks/{task_id}/stream")
-async def task_stream(task_id: str, user: User = Depends(get_current_user)):
+async def task_stream(task_id: str, user: User = Depends(get_current_user_detached)):
     """SSE：订阅采集任务的进度事件。
     事件类型：stage（{stage, status, preview}）、done、error。
     前端用 task_id 订阅后逐阶段渲染进度条。
@@ -443,7 +762,7 @@ async def task_stream(task_id: str, user: User = Depends(get_current_user)):
 
     async def gen():
         last_stage = None
-        deadline = _asyncio.get_event_loop().time() + 180  # 3 min max
+        deadline = _asyncio.get_event_loop().time() + 900  # 15 min for multi-stage collection
         poll_interval = 1.0
 
         while _asyncio.get_event_loop().time() < deadline:
@@ -535,6 +854,9 @@ def history_delete(conv_id: int, user: User = Depends(get_current_user), db: Ses
     conv = db.get(Conversation, conv_id)
     if conv is None or conv.user_id != user.id:
         raise HTTPException(404, "会话不存在")
+    db.query(MemoryEpisode).filter(
+        MemoryEpisode.conversation_id == conv_id,
+    ).delete(synchronize_session=False)
     db.query(Message).filter(Message.conversation_id == conv_id).delete(synchronize_session=False)
     db.delete(conv)
     db.commit()
@@ -639,7 +961,9 @@ def prices(q: str = "", brand: str = "", sort: str = "price", order: str = "desc
         "MAX(p.guide_price_min) AS pmin, MAX(p.guide_price_max) AS pmax, "
         "MAX(p.price_text) AS price_text, MAX(p.descender_price) AS descender "
         "FROM fact_price p JOIN dim_series s ON s.series_id=p.series_id JOIN dim_brand b ON b.brand_id=s.brand_id "
-        f"WHERE {' AND '.join(where)} GROUP BY s.series_id ORDER BY {col} {direction} LIMIT :limit"
+        f"WHERE {' AND '.join(where)} "
+        "GROUP BY b.brand_name, s.series_id, s.series_name, s.segment, s.endurance_km "
+        f"ORDER BY {col} {direction} LIMIT :limit"
     )
     count_sql = (
         "SELECT COUNT(DISTINCT s.series_id) "

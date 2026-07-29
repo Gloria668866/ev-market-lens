@@ -1,4 +1,4 @@
-"""LangGraph 双脑编排（PRD-2 §7）：用状态图把 数据脑(Text2SQL) 与 知识脑(RAG) 真正编排起来。
+"""LangGraph 双脑编排（见 docs/technical-design.md 第 2 节）。
 
 为什么用状态图而非 if-else（§7.1）：
 - 显式 State + 节点 + 条件边，复杂多步流程可控可回溯；
@@ -367,12 +367,21 @@ def intent_router(state: AgentState):
         confidence = result.get("confidence", 1.0)
     else:
         confidence = result.get("confidence", 0.8)
+        llm_classified = bool(
+            result.get(
+                "llm_calls",
+                1 if not source else int(source == "layer2_llm"),
+            )
+        )
         trace_entry = _t("intent_router",
                          intent=intent,
                          confidence=round(confidence, 2),
                          entities=entities,
                          is_complete=result.get("is_complete", True),
-                         llm_classified=True)
+                         nlu_source=source or "unknown",
+                         nlu_latency_ms=result.get("nlu_latency_ms"),
+                         nlu_llm_calls=result.get("llm_calls"),
+                         llm_classified=llm_classified)
 
     upd: dict = {
         "intent": intent,
@@ -778,17 +787,10 @@ def insight(state: AgentState):
     # 路径B：SQL 执行成功但结果为空
     if not has_rows:
         q = state.get("question", "")
-        all_text = q
-        if state.get("uses_history_entities"):
-            for m in (state.get("history") or []):
-                all_text += " " + (m.get("content") or "")
-        all_text += " " + (state.get("sql") or "")
-        brand_hint = ""
-        from .nlu import _get_keyword_brands
-        for word in _get_keyword_brands():
-            if word in all_text:
-                brand_hint = f"「{word}」可能不在当前数据库覆盖范围内（目前覆盖 101 个品牌，以国产新能源为主）。"
-                break
+        empty_hint = (
+            "当前筛选条件下没有匹配记录（可能是时间超出数据范围、"
+            "车型尚未覆盖或该口径暂无数据）。"
+        )
 
         # Step 1: 先查 RAG 知识库 — 之前 pipeline 采集的数据可能已经存在
         try:
@@ -824,7 +826,7 @@ def insight(state: AgentState):
                 eta = "30 秒到 2 分钟" if mode == "celery" else "约 1 到 3 分钟"
                 return {"no_data": True,
                         "task_id": task_id,
-                        "insight": f"数据库暂无相关数据。{brand_hint}"
+                        "insight": f"数据库暂无相关数据。{empty_hint}"
                                    f"已启动智能数据采集（任务ID：{task_id[:12]}…），预计需要 {eta}。\n"
                                    f"页面会持续显示任务进度，完成后可直接查看采集结论。",
                         "trace": [_t("insight", empty_result=True, task_id=task_id,
@@ -834,7 +836,7 @@ def insight(state: AgentState):
                          task_id, queued.get("error", "unknown"))
             return {
                 "no_data": True,
-                "insight": f"数据库暂无相关数据。{brand_hint}"
+                "insight": f"数据库暂无相关数据。{empty_hint}"
                            "智能采集服务暂不可用，请确认 Redis/Celery 已启动后重试；"
                            "当前请求没有在后台偷偷同步执行。",
                 "trace": [_t("insight", empty_result=True,
@@ -843,7 +845,7 @@ def insight(state: AgentState):
         except Exception as exc:
             _log.warning("Collection enqueue failed for %s: %s", task_id, exc)
             return {"no_data": True,
-                    "insight": f"数据库暂无相关数据。{brand_hint}"
+                    "insight": f"数据库暂无相关数据。{empty_hint}"
                                "智能采集服务暂不可用，请稍后重试。",
                     "trace": [_t("insight", empty_result=True,
                                  mode="queue_error", error=str(exc)[:100])]}

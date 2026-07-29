@@ -1,5 +1,7 @@
 # 车市镜 · 后端镜像（FastAPI / Celery worker / Celery beat 三者共用，靠 command 区分）
-# 含 RAG 全套：torch(CPU)+sentence-transformers+pgvector+jieba；爬虫 scrapling（给 beat 定时采集用）。
+# 含 RAG 全套：torch(CPU)+sentence-transformers+pgvector+jieba。
+# 销量定时采集只使用 Python 标准库 HTTP；缺数后的网页采集 Agent 使用
+# Playwright Chromium，运行时失败会自动降级到加固 httpx。
 # 模型权重不打进镜像（~2.8GB）——运行时挂 /models 卷（见 docker-compose.prod.yml / DEPLOY.md）。
 FROM python:3.12-slim
 
@@ -9,18 +11,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# 先装依赖（利用层缓存）；scrapling 不在 requirements，单独装（仅用 Fetcher.get，无需浏览器）
+# 先装依赖（利用层缓存）
 ARG PIP_INDEX_URL=https://pypi.org/simple
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i ${PIP_INDEX_URL} -r requirements.txt \
-    && pip install --no-cache-dir -i ${PIP_INDEX_URL} "scrapling>=0.4"
+RUN pip install --no-cache-dir -i ${PIP_INDEX_URL} -r requirements.txt
+RUN python -m playwright install --with-deps chromium
 
 # 再拷代码（改代码不必重装依赖）
 COPY app/ ./app/
+COPY config/ ./config/
 COPY data/ ./data/
 COPY sql/ ./sql/
-# 定时任务要 import 的 PG 加载器（让 deploy 成为可导入包）
-COPY deploy/load_analysis_pg.py ./deploy/load_analysis_pg.py
+# 生产任务需要的脚本与旧数据卷迁移。只复制运行时需要的部署文件，
+# 避免把证书、备份等宿主机运维材料带进应用镜像。
+COPY deploy/load_analysis_pg.py deploy/migrate_app_pg.py ./deploy/
+COPY deploy/postgres/migrations/ ./deploy/postgres/migrations/
 RUN touch deploy/__init__.py
 
 ENV PYTHONUNBUFFERED=1 PYTHONUTF8=1 \
@@ -30,5 +35,6 @@ ENV PYTHONUNBUFFERED=1 PYTHONUTF8=1 \
 
 EXPOSE 8000
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# 默认起 API；worker/beat 在 compose 里用 command 覆盖
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# 默认按 2C8G 演示机起 1 个 API worker；compose 可用 API_WORKERS 覆盖。
+# Celery worker/beat 在 compose 里用 command 覆盖。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

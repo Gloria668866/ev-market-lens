@@ -1,0 +1,32 @@
+flowchart TB
+    subgraph STRUCT["结构化市场数据链"]
+        API["懂车帝公开销量 JSON API"] --> CRAWL["Python 标准库 HTTP<br/>缺失分区补齐 + 最近两月刷新"]
+        CRAWL --> RAW[("sales_rank_raw.jsonl<br/>分区去重后原子替换")]
+        RAW --> CLEAN["字段校验、类型转换、主键去重"]
+        CLEAN --> SB{"运行后端（二选一）"}
+        SB -->|"local"| LBI[("本地分析库 SQLite")]
+        SB -->|"production"| PBI[("生产分析库 PostgreSQL<br/>只读角色供查询")]
+        LBI --> SQL["Text2SQL"]
+        PBI --> SQL
+    end
+
+    subgraph DOC["非结构化知识链"]
+        UP["用户上传文档"] --> LITE["lite parser"]
+        RESEARCH["空结果研究任务<br/>审核通过"] --> PRIVATE["标记为发起用户私有文档"]
+        PRIVATE --> LITE
+        LITE --> CHUNK["父子分块 + BGE embedding"]
+        CHUNK --> RB{"RAG_BACKEND（二选一）"}
+        RB -->|"local"| LRAG[("本地 SQLite + numpy")]
+        RB -->|"pg"| PRAG[("生产 PG + pgvector<br/>原文 MinIO")]
+        LRAG --> RAG["RAG 检索与引用"]
+        PRAG --> RAG
+    end
+
+    RAG --> OUT["Agent 统一回答"]
+    SQL --> OUT
+    BOUND["边界：研究任务不回写销量事实表，也不自动重跑原 SQL"]
+    PRIVATE -.-> BOUND
+    classDef src fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef proc fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef store fill:#E6F4EA,stroke:#34A853,color:#000;
+    class API,UP,RESEARCH src; class CRAWL,CLEAN,LITE,CHUNK,SQL,RAG,PRIVATE proc; class RAW,LBI,PBI,LRAG,PRAG store;

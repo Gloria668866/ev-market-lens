@@ -1,0 +1,90 @@
+erDiagram
+    users ||--o{ conversation : owns
+    users ||--o{ message : owns
+    users o|--o{ kb_document : "owns; NULL means public"
+    users ||--o{ saved_insight : owns
+    users o|--o{ shared_insight : creates
+    users ||--o{ user_profile : has
+    users ||--o{ memory_episode : has
+    conversation ||--o{ message : contains
+    conversation ||--o| memory_episode : summarizes
+    kb_document ||--o{ kb_chunk : contains
+    kb_chunk o|--o{ kb_chunk : "parent of"
+    users {
+        bigint id PK
+        string username UK
+        string password_hash
+        string role
+        boolean disabled
+        int token_version
+    }
+    conversation {
+        bigint id PK
+        bigint user_id FK
+        string title
+        timestamp created_at
+    }
+    message {
+        bigint id PK
+        bigint conversation_id FK
+        bigint user_id FK
+        string role "user/assistant"
+        text content
+        string intent "sql/rag/hybrid/chat/clarify"
+        text sql_text
+        text result_meta "JSON: rows/chart/citations/trace"
+        timestamp created_at
+    }
+    kb_document {
+        bigint id PK
+        bigint user_id FK "nullable: public"
+        string filename
+        string status "parsing/ready/failed"
+        string file_type
+        string source_uri
+        string title
+        int chunk_count
+        timestamp created_at
+        timestamp deleted_at
+    }
+    kb_chunk {
+        bigint chunk_id PK
+        bigint doc_id FK
+        bigint user_id "nullable: public"
+        int chunk_index
+        string level "parent/child"
+        bigint parent_chunk_id FK
+        boolean is_retrievable
+        string heading_path
+        text content
+        text content_embed
+        text content_tokens
+        vector embedding "BGE-large-zh 1024维"
+        string embedding_model_version
+        int embedding_dim
+        int page_no
+        int token_count
+    }
+    saved_insight {
+        bigint id PK
+        bigint user_id FK
+        text payload "result snapshot"
+    }
+    shared_insight {
+        bigint id PK
+        string token UK
+        bigint user_id FK "nullable"
+        text payload "read-only snapshot"
+    }
+    user_profile {
+        bigint id PK
+        bigint user_id FK
+        string key
+        text value
+    }
+    memory_episode {
+        bigint id PK
+        bigint user_id FK
+        bigint conversation_id FK
+        text summary
+    }

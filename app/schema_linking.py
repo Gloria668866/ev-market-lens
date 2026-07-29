@@ -4,7 +4,7 @@
 - 原关键词匹配 = 中文问题 vs 英文表名，命中率极低（"口碑" 无法匹配 "fact_review"）
 - 现在：语义描述匹配 + 实体信号增强 + 列名匹配三层叠加
 """
-from .db import get_tables_meta, get_schema_text
+from .db import get_schema_snapshot
 
 # 每张表的中文语义描述——解决「中文问题 vs 英文表名」的核心矛盾
 _TABLE_SEMANTIC = {
@@ -59,9 +59,9 @@ def link_schema(question: str, entities: dict = None, max_tables: int = 6) -> st
     2. 实体信号增强（已提取实体直接拉入相关表）
     3. 列名兜底（原有逻辑保留）
     """
-    meta = get_tables_meta()
+    full_schema, meta = get_schema_snapshot()
     if len(meta) <= max_tables:
-        return get_schema_text()
+        return full_schema
 
     q = question.lower()
     entities = entities or {}

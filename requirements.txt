@@ -3,6 +3,7 @@ uvicorn[standard]>=0.29
 sqlalchemy>=2.0
 sqlglot>=25                  # SQL 安全护栏：AST 级解析，只放行单条 SELECT（替代 sqlparse 关键字匹配）
 openai>=1.30
+httpx>=0.27                  # Agent HTTP/网页采集基础通道；浏览器不可用时也是最终降级路径
 python-dotenv>=1.0
 pydantic>=2.6
 sse-starlette>=2.1
@@ -12,7 +13,7 @@ python-jose[cryptography]>=3.3 # JWT 签发/校验
 psycopg[binary]>=3.1           # PostgreSQL 驱动；RAG/联调/生产切 PG 用，SQLite demo 可不装
 python-multipart>=0.0.9        # FastAPI 文件上传（/api/kb/upload）依赖
 
-# ===== RAG 离线入库管线（PRD-2 §5）=====
+# ===== RAG 离线入库管线（见 docs/technical-design.md 第 5 节）=====
 pgvector>=0.3                   # pgvector 的 psycopg 适配（vector(1024) 读写）
 minio>=7.2                      # 对象存储客户端（原始文件先落 MinIO）
 celery>=5.3                     # 解析/切块/向量化异步任务
@@ -24,5 +25,6 @@ jieba>=0.42                    # 中文分词：全文检索通道(PG simple 不
 
 langgraph>=0.2                 # 双脑编排状态图（intent路由/重试环/hybrid并行/trace）
 
-# ===== 反爬数据采集（crawl4ai + Playwright stealth）=====
-crawl4ai>=0.9                  # 隐身浏览器抓取（Playwright+反检测+JS渲染+反爬检测）
+# ===== 缺数后的网页采集增强（Playwright Chromium + SSRF 路由守卫）=====
+# 公开销量 JSON 的月度主链路只用 data/crawl_sales.py（Python 标准库 HTTP），不依赖浏览器。
+playwright>=1.44               # Docker 构建显式安装 Chromium；运行时失败会降级到加固 httpx

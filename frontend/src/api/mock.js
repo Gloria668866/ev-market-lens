@@ -1,4 +1,4 @@
-// 本地 Mock：后端未就绪时，按 PRD-2 §9.1 的事件节奏模拟 SSE 流，先把界面调通。
+// 本地 Mock：后端未就绪时，按当前 SSE 合同模拟事件流，先把界面调通。
 // 直接吐「规范事件」（与 events.js 归一化后的形态一致），组件层无感知。
 // 数据脑用贴近真实量级的样例；知识脑(RAG)做**离线真检索**——对 kb_corpus.json（由
 // data/build_local_kb.py 从真实语料库导出）做词法检索，命中真实原文段落、给真实引用，绝非写死。
@@ -162,7 +162,7 @@ WHERE b.brand_name LIKE '%${picked.brand}%'
 GROUP BY s.series_id, s.series_name
 ORDER BY total_volume DESC` })
     await sleep(520); if (aborted()) return
-    const msg = `未查询到「${picked.brand}」的相关数据。「${picked.brand}」可能不在当前数据库覆盖范围内（目前覆盖 101 个品牌，以国产新能源为主）。\n\n可尝试：\n1. 换一个品牌或车系（如「比亚迪」「小米SU7」）\n2. 问更宽泛的问题（如「2025年纯电销量Top10」）`
+    const msg = `未查询到「${picked.brand}」的相关数据。当前筛选条件可能超出数据时间范围、车型尚未覆盖，或该组合暂无销量记录。\n\n可尝试：\n1. 调整月份或年份\n2. 换一个品牌或车系（如「比亚迪」「小米SU7」）\n3. 问更宽泛的问题（如「2025年纯电销量Top10」）`
     for (const tk of tokenize(msg)) { if (aborted()) return; onEvent({ type: 'insight', delta: tk }); await sleep(14) }
     onEvent({ type: 'done', msgId: Date.now() })
     onClose?.()

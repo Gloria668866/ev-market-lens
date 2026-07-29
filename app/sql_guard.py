@@ -27,6 +27,25 @@ _FORBIDDEN = (
     exp.Set, exp.Use,
 )
 
+_ALLOWED_TABLES = {
+    "dim_brand",
+    "dim_series",
+    "dim_date",
+    "fact_sales_rank",
+    "fact_price",
+    "fact_review",
+}
+_FORBIDDEN_FUNCTIONS = {
+    "pg_sleep",
+    "pg_read_file",
+    "pg_read_binary_file",
+    "pg_ls_dir",
+    "dblink",
+    "lo_import",
+    "lo_export",
+    "set_config",
+}
+
 
 def ensure_safe(sql: str) -> str:
     """校验并返回规整后的 SQL；不安全则抛 UnsafeSQLError。"""
@@ -50,11 +69,45 @@ def ensure_safe(sql: str) -> str:
     if bad is not None:
         raise UnsafeSQLError(f"检测到禁止的语句类型: {type(bad).__name__}")
 
+    cte_names = {
+        cte.alias_or_name.lower()
+        for cte in stmt.find_all(exp.CTE)
+        if cte.alias_or_name
+    }
+    table_references = list(stmt.find_all(exp.Table))
+    for table in table_references:
+        # 表函数（如 generate_series）不会解析成普通 Identifier。
+        if not isinstance(table.this, exp.Identifier):
+            raise UnsafeSQLError("禁止使用表函数")
+        name = table.name.lower()
+        if name not in _ALLOWED_TABLES and name not in cte_names:
+            raise UnsafeSQLError(f"不允许访问分析库之外的表: {name}")
+    if len(table_references) > 8:
+        raise UnsafeSQLError("查询引用表过多")
+
+    for function in stmt.find_all(exp.Func):
+        name = (
+            function.name
+            if isinstance(function, exp.Anonymous)
+            else function.sql_name()
+        )
+        if str(name or "").lower() in _FORBIDDEN_FUNCTIONS:
+            raise UnsafeSQLError(f"禁止调用函数: {name}")
+
+    for join in stmt.find_all(exp.Join):
+        kind = str(join.args.get("kind") or "").upper()
+        if kind == "CROSS" or (
+            not join.args.get("on")
+            and not join.args.get("using")
+            and not join.args.get("method")
+        ):
+            raise UnsafeSQLError("禁止笛卡尔积或无连接条件 JOIN")
+
     return sql
 
 
 def with_limit(sql: str, default_limit: int = 200) -> str:
-    """没有 LIMIT 时兜底加上，防止全表扫描。"""
+    """没有 LIMIT 时限制返回行数；扫描成本由 PG statement_timeout 控制。"""
     if "LIMIT" not in sql.upper():
         sql = f"{sql}\nLIMIT {default_limit}"
     return sql

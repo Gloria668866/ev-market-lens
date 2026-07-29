@@ -1,0 +1,1 @@
+# Keep the host bind-mount directory owned by the repository user on fresh clones.

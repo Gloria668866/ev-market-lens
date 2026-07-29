@@ -1,6 +1,6 @@
 """BGE-large-zh 向量化（本地，1024 维）。
 
-要点（PRD-2 §5.3/§5.4/§5.8）：
+要点（见 docs/technical-design.md 第 5 节）：
 - query/passage **非对称**：检索侧 query 要加指令前缀，入库的 passage **不加前缀**；加错召回明显掉。
 - **归一化**（normalize）后用余弦相似度（pgvector vector_cosine_ops / HNSW 同款）。
 - **512 token 硬上限**：超了被截断丢语义；token 用模型自带 tokenizer 精确数（中文按 token 不按字符）。
@@ -10,8 +10,16 @@
 import os
 import re
 import threading
+from pathlib import Path
 
-from ..config import EMBED_MODEL_NAME, EMBED_MAX_TOKENS, RERANK_MODEL_NAME
+import numpy as np
+
+from ..config import (
+    EMBED_DIM,
+    EMBED_MODEL_NAME,
+    EMBED_MAX_TOKENS,
+    RERANK_MODEL_NAME,
+)
 
 import logging; _log = logging.getLogger("cheshijing.embed")
 
@@ -32,7 +40,10 @@ def get_model():
             if _model == "unloaded":
                 try:
                     from sentence_transformers import SentenceTransformer
-                    m = SentenceTransformer(EMBED_MODEL_NAME)
+                    m = SentenceTransformer(
+                        EMBED_MODEL_NAME,
+                        local_files_only=Path(EMBED_MODEL_NAME).is_dir(),
+                    )
                     m.max_seq_length = EMBED_MAX_TOKENS
                     _model = m
                 except Exception as e:
@@ -56,36 +67,75 @@ def count_tokens(text: str) -> int:
     m = get_model()
     if m is None:
         return _heuristic_tokens(text)
-    return len(m.tokenizer(text, add_special_tokens=True, truncation=False)["input_ids"])
+    # 这里只计数、不把长文本送进模型；关闭 tokenizer 的“超过模型上限”告警，
+    # 避免评测日志误报为推理失败。真正编码仍由 SentenceTransformer 的
+    # max_seq_length=EMBED_MAX_TOKENS 负责截断。
+    return len(
+        m.tokenizer(
+            text,
+            add_special_tokens=True,
+            truncation=False,
+            verbose=False,
+        )["input_ids"]
+    )
 
 
 def embed_passages(texts):
     """入库侧：passage 不加前缀、归一化。模型不可用 → 返回 []（调用方走词法检索）。"""
-    if not texts or get_model() is None:
+    model = get_model()
+    if not texts or model is None:
         return []
-    vecs = get_model().encode(texts, normalize_embeddings=True,
-                              batch_size=32, show_progress_bar=False)
-    return [v.tolist() for v in vecs]
+    vecs = model.encode(texts, normalize_embeddings=True,
+                        batch_size=32, show_progress_bar=False)
+    if len(vecs) != len(texts):
+        raise RuntimeError(
+            f"embedding batch mismatch: expected {len(texts)}, got {len(vecs)}"
+        )
+    output = []
+    for index, vector in enumerate(vecs):
+        array = np.asarray(vector, dtype=np.float32)
+        if array.shape != (EMBED_DIM,):
+            raise RuntimeError(
+                f"passage embedding {index} shape {array.shape}, "
+                f"expected {(EMBED_DIM,)}"
+            )
+        output.append(array.tolist())
+    return output
 
 
 def embed_query(text: str):
     """检索侧：query 加指令前缀、归一化。模型不可用 → 返回 None（调用方跳过向量召回）。"""
-    if get_model() is None:
+    model = get_model()
+    if model is None:
         return None
-    vec = get_model().encode([_QUERY_INSTRUCTION + text], normalize_embeddings=True)[0]
-    return vec.tolist()
+    vector = model.encode(
+        [_QUERY_INSTRUCTION + text],
+        normalize_embeddings=True,
+    )[0]
+    array = np.asarray(vector, dtype=np.float32)
+    if array.shape != (EMBED_DIM,):
+        raise RuntimeError(
+            f"query embedding shape {array.shape}, expected {(EMBED_DIM,)}"
+        )
+    return array.tolist()
 
 
 def _get_reranker():
     """懒加载 bge-reranker（CrossEncoder）；模型不可用返回 None（调用方降级用 RRF 分）。"""
     global _reranker
     if _reranker == "unloaded":
-        try:
-            from sentence_transformers import CrossEncoder
-            _reranker = CrossEncoder(RERANK_MODEL_NAME, max_length=512)
-        except Exception as e:               # 模型没下到/加载失败 → 降级
-            _log.warning(f"bge-reranker 不可用，降级为 RRF 排序：{e}")
-            _reranker = None
+        with _reranker_lock:
+            if _reranker == "unloaded":
+                try:
+                    from sentence_transformers import CrossEncoder
+                    _reranker = CrossEncoder(
+                        RERANK_MODEL_NAME,
+                        max_length=512,
+                        local_files_only=Path(RERANK_MODEL_NAME).is_dir(),
+                    )
+                except Exception as e:       # 模型没下到/加载失败 → 降级
+                    _log.warning(f"bge-reranker 不可用，降级为 RRF 排序：{e}")
+                    _reranker = None
     return _reranker
 
 

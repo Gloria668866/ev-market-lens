@@ -21,7 +21,8 @@ venv/
 bi_demo.db
 
 # ===== 爬取的原始数据（用 data/crawl_sales.py / crawl_koubei.py 可重新生成，体积大）=====
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
 
 # ===== RAG 语料候选（用 data/export_rag_corpus.py 可重新生成，体积大）=====
 data/rag_corpus/
@@ -50,6 +51,8 @@ eval/reports/_*.log
 .omc/
 **/.omc/
 .tmp/
+/tmp/
+/.local-notes/
 .agents/
 .codex/
 .reasonix/

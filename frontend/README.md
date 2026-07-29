@@ -36,4 +36,6 @@ src/
   components/ ...           Sidebar / TopBar / EmptyState / MessageList / 双脑结果卡 / Composer ...
 ```
 
-详细设计与运行说明见 `docs/工作记录/前端/2026-05-22-前端门面.md`。
+项目架构、接口协议与运行边界见仓库根目录
+[`docs/technical-design.md`](../docs/technical-design.md)；生产部署步骤见
+[`deploy/DEPLOY.md`](../deploy/DEPLOY.md)。

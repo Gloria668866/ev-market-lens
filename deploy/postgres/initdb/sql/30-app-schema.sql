@@ -2,14 +2,8 @@
 -- 车市镜 · 应用库（app）建表脚本  —— 由 docker-compose 初始化时载入
 -- 方言：PostgreSQL（kb_chunk.embedding 需 pgvector，载入前已 CREATE EXTENSION vector）
 --
--- 重要设计决策（2026-05-25，运维 T14 拉基础设施时定）：
---   users/conversation/message/kb_document 的列名**对齐当前后端 app/models.py**
---   （主键 id、外键 conversation_id 等），而**不是** sql/schema_app.sql 里的
---   user_id/conv_id/msg_id/doc_id 命名 —— 否则后端 ORM 查询会全部报错（查 users.id
---   但表里只有 user_id）。kb_chunk（父子分块 + 向量）则取自 schema_app.sql，给 RAG 用。
---   kb_document 在 models.py 必需列之外，额外补了 schema_app.sql 的若干 RAG 列
---   （file_type/source_uri/title/chunk_count/deleted_at，均 nullable）——
---   后端 ORM 只读写核心列，多出来的列留给后续 RAG/MinerU 入库用，互不影响。
+-- 权威来源：app/models.py（ORM 表）+ app/rag/pg.py（kb_chunk）。
+-- sql/schema_app.sql 是同一结构的公开参考副本；三者字段必须同步。
 -- ============================================================
 
 -- ---------- 用户（登录模块，对齐 app/models.py: User）----------
@@ -20,6 +14,7 @@ CREATE TABLE users (
     nickname       VARCHAR(64),
     role           VARCHAR(16) DEFAULT 'user',       -- 'user' / 'admin'
     disabled       BOOLEAN DEFAULT FALSE,            -- 禁用后不能登录
+    token_version  INTEGER DEFAULT 0,                -- 改密后自增，使旧 JWT 立即失效
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login_at  TIMESTAMP
 );
@@ -39,7 +34,7 @@ CREATE TABLE message (
     user_id          BIGINT NOT NULL REFERENCES users(id),   -- 冗余便于按用户过滤
     role             VARCHAR(16) NOT NULL,                   -- 'user' / 'assistant'
     content          TEXT,
-    intent           VARCHAR(16),                            -- sql / doc / chat
+    intent           VARCHAR(16),                            -- sql / rag / hybrid / chat / clarify
     sql_text         TEXT,                                   -- 助手消息生成的 SQL（可溯源）
     result_meta      TEXT,                                   -- JSON：图表描述符/列+行/引用/trace（历史会话还原）
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -48,12 +43,12 @@ CREATE TABLE message (
 -- ---------- 知识库文档（对齐 app/models.py: KbDocument，并补 RAG 用列）----------
 CREATE TABLE kb_document (
     id          BIGSERIAL PRIMARY KEY,
-    user_id     BIGINT NOT NULL REFERENCES users(id),    -- 归属用户（检索按此过滤，防串数据）
+    user_id     BIGINT REFERENCES users(id),             -- NULL=公共知识；非NULL=用户私有
     filename    VARCHAR(255) NOT NULL,
     status      VARCHAR(16) DEFAULT 'ready',             -- parsing / ready / failed
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- 以下为 RAG/MinerU 入库用的扩展列（后端 ORM 暂不读写，先留位）：
-    file_type   VARCHAR(16),                             -- pdf/docx/html
+    -- 以下为 RAG 入库字段：
+    file_type   VARCHAR(16),                             -- pdf/md/txt/html
     source_uri  VARCHAR(512),                            -- MinIO 对象路径
     title       VARCHAR(256),
     chunk_count INTEGER DEFAULT 0,
@@ -83,21 +78,46 @@ CREATE TABLE shared_insight (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ---------- 长期记忆（对齐 app/models.py）----------
+CREATE TABLE user_profile (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         BIGINT NOT NULL REFERENCES users(id),
+    key             VARCHAR(64) NOT NULL,
+    value           TEXT NOT NULL,
+    confidence      DOUBLE PRECISION DEFAULT 1.0,
+    evidence_count  INTEGER DEFAULT 1,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_user_profile_uid_key UNIQUE(user_id, key)
+);
+
+CREATE TABLE memory_episode (
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          BIGINT NOT NULL REFERENCES users(id),
+    conversation_id  BIGINT NOT NULL REFERENCES conversation(id),
+    summary          TEXT NOT NULL,
+    entities_json    TEXT,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_episode_uid_conv UNIQUE(user_id, conversation_id)
+);
+
 CREATE INDEX idx_conversation_user ON conversation(user_id);
 CREATE INDEX idx_message_user      ON message(user_id);
 CREATE INDEX idx_message_conv      ON message(conversation_id);
 CREATE INDEX idx_kb_document_user  ON kb_document(user_id);
 CREATE INDEX idx_saved_insight_user ON saved_insight(user_id);
 CREATE INDEX idx_shared_insight_token ON shared_insight(token);
+CREATE INDEX idx_user_profile_user ON user_profile(user_id);
+CREATE INDEX idx_memory_episode_user ON memory_episode(user_id);
+CREATE INDEX idx_memory_episode_conv ON memory_episode(conversation_id);
 
 -- ---------- 文档切片（父子分块 + 向量；取自 sql/schema_app.sql）----------
--- 设计依据：PRD-2 §5.3.2（父子分块）/ §5.4.1（父块归并）/ §5.6（字段推导）
+-- 设计依据：docs/technical-design.md 第 5 节（父子分块、父块归并、字段血缘）
 -- 父、子同表用 level 区分；子行 parent_chunk_id 指父行；仅子块（is_retrievable）参与向量检索。
 -- 注意：doc_id 外键指向 kb_document(id)（对齐上面的 id 主键，非 schema_app.sql 的 doc_id）。
 CREATE TABLE kb_chunk (
     chunk_id        BIGSERIAL PRIMARY KEY,
     doc_id          BIGINT REFERENCES kb_document(id),
-    user_id         BIGINT,                          -- 冗余：检索热路径 WHERE user_id 直接过滤，免 join（多租户隔离）
+    user_id         BIGINT,                          -- NULL=公共；非NULL=私有，检索取公共+当前用户
     chunk_index     INTEGER,                         -- 文档内顺序号（相邻父块合并依据）
     level           VARCHAR(8),                      -- 'child' / 'parent'（父子分块角色）
     parent_chunk_id BIGINT,                          -- child→所属 parent；parent 行为 NULL
@@ -108,6 +128,8 @@ CREATE TABLE kb_chunk (
     content_embed   TEXT,                            -- 实际送 BGE 的文本（原文+标题前缀）；NULL=同 content
     content_tokens  TEXT,                            -- jieba 分词后的 content（空格分隔），供中文全文检索
     embedding       vector(1024),                    -- BGE-large-zh；仅子块有；需 pgvector
+    embedding_model_version VARCHAR(128),            -- 向量空间版本；换模型必须重建
+    embedding_dim   INTEGER,                         -- 写入时实际维度；与 vector typmod 双重校验
     page_no         INTEGER,                         -- 引用溯源
     token_count     INTEGER,                         -- 校验 <=512 / 组装上下文控预算
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP

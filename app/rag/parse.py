@@ -1,6 +1,6 @@
 """可插拔文档解析器：PDF/HTML/纯文本 → 结构化块（保留标题层级、表格、页码）。
 
-设计（PRD-2 §5.2）：解析的产物是「带结构的块序列」，给后面「结构感知切块」和「引用溯源」打底：
+设计（见技术设计第 5.1 节）：解析产物是带结构的块序列，供切块和引用溯源：
   block = {"type": "heading"|"text"|"table", "text": str, "level": int,
            "heading_path": [str,...], "page_no": int}
   - heading 块：更新标题栈；level=标题深度（1=最大标题）。

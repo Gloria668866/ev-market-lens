@@ -1,0 +1,47 @@
+flowchart TB
+  subgraph FE["浏览器前端 · Vue 3 + Vite + ECharts"]
+    UI["对话、图表、引用、任务进度"]
+    TR["fetch + ReadableStream<br/>解析 POST-SSE"]
+  end
+  subgraph BE["FastAPI 应用"]
+    AUTH["JWT / 用户隔离"]
+    AG["LangGraph 13 节点"]
+    T2S["Text2SQL"]
+    SAFE["sqlglot AST 护栏<br/>verify_sql"]
+    RAGM["父子块混合检索 RAG<br/>证据门控 + 引用"]
+    PIPE["空结果异步研究链<br/>Research → Plan → Code ≤3 → Review"]
+    LF["本地有界进程内 fallback<br/>仅开发环境"]
+  end
+  subgraph LOCAL["本地开发后端"]
+    LBI[("分析 SQLite")]
+    LRAG[("RAG SQLite + numpy")]
+  end
+  subgraph PROD["生产后端"]
+    PGBI[("PostgreSQL 分析库<br/>只读角色")]
+    PGAPP[("PostgreSQL 应用库<br/>+ pgvector")]
+    MINIO[("MinIO 原文")]
+    QUEUE[("Redis + Celery")]
+  end
+  MODEL["本地 BGE embedding + reranker"]
+  LLM["OpenAI-compatible 对话模型 API"]
+
+  UI --> TR --> AUTH --> AG
+  AG --> T2S --> SAFE
+  AG --> RAGM
+  AG -. "空结果且无证据" .-> PIPE
+  SAFE --> LBI
+  SAFE --> PGBI
+  RAGM --> LRAG
+  RAGM --> PGAPP
+  RAGM --> MODEL
+  PIPE --> QUEUE
+  PIPE --> LF
+  QUEUE --> PGAPP
+  QUEUE --> MINIO
+  QUEUE --> LLM
+  LF --> LLM
+  AG --> LLM
+  TR -. "stage / intent / sql / rows / chart / collection / insight / citation / done / error" .-> UI
+
+  PARSE["当前解析器：lite<br/>MinerU 仅预留，未实现"]
+  MINIO --> PARSE --> PGAPP

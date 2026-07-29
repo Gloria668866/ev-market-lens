@@ -682,6 +682,26 @@ def test_insight_no_data_returns_task_id(monkeypatch):
     assert mock_enqueue.called
     # Verify the user-facing message mentions collection
     assert "采集" in result.get("insight", "")
+    assert "不在当前数据库覆盖范围" not in result.get("insight", "")
+
+
+def test_known_brand_empty_result_does_not_claim_brand_is_uncovered(monkeypatch):
+    mock_enqueue = MagicMock(return_value={"accepted": True, "mode": "celery"})
+    monkeypatch.setattr("app.rag.retrieve.hybrid_recall", MagicMock(return_value=[]))
+    monkeypatch.setattr("app.agent_pipeline.enqueue_pipeline", mock_enqueue)
+
+    result = graph_module.insight({
+        "question": "比亚迪2030年销量是多少？",
+        "sql": "SELECT * FROM fact_sales_rank WHERE date_id BETWEEN 203001 AND 203012",
+        "rows": [],
+        "cols": [],
+        "history": [],
+        "user_id": 1,
+    })
+
+    assert result["no_data"] is True
+    assert "当前筛选条件下没有匹配记录" in result["insight"]
+    assert "比亚迪」可能不在" not in result["insight"]
 
 
 def test_null_only_aggregate_result_triggers_no_data_pipeline(monkeypatch):

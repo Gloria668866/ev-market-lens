@@ -1,4 +1,4 @@
-// 意图路由评测集（100 条）。gold ∈ sql/rag/hybrid/clarify。
+// 意图路由评测集（110 条）。gold ∈ sql/rag/hybrid/chat/clarify。
 // 含「问文档里的数字（如充电桩多少个）被规则误判为查库」等真实弱点案例，用于暴露规则局限。
 {"id":"int-001","q":"2025年纯电销量前十的车系","gold":"sql"}
 {"id":"int-002","q":"理想L6和小米SU7谁卖得多","gold":"sql"}
@@ -100,3 +100,13 @@
 {"id":"int-098","q":"帮我参考一下","gold":"clarify"}
 {"id":"int-099","q":"这个靠谱吗","gold":"clarify"}
 {"id":"int-100","q":"你觉得呢","gold":"clarify"}
+{"id":"int-101","q":"你好","gold":"chat"}
+{"id":"int-102","q":"谢谢你的帮助","gold":"chat"}
+{"id":"int-103","q":"今天天气怎么样","gold":"chat"}
+{"id":"int-104","q":"给我讲个笑话","gold":"chat"}
+{"id":"int-105","q":"再见","gold":"chat"}
+{"id":"int-106","q":"你是谁","gold":"chat"}
+{"id":"int-107","q":"帮我写一首诗","gold":"chat"}
+{"id":"int-108","q":"午饭吃什么","gold":"chat"}
+{"id":"int-109","q":"早上好","gold":"chat"}
+{"id":"int-110","q":"你能做什么","gold":"chat"}

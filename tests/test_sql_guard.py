@@ -4,7 +4,7 @@ from app.sql_guard import ensure_safe, with_limit, UnsafeSQLError
 
 
 def test_allow_select():
-    assert ensure_safe("SELECT * FROM t").upper().startswith("SELECT")
+    assert ensure_safe("SELECT * FROM fact_sales_rank").upper().startswith("SELECT")
 
 
 @pytest.mark.parametrize("sql", [
@@ -31,4 +31,28 @@ def test_with_limit_keeps_existing():
 
 def test_column_named_update_not_misfired():
     # update_time 这种列名不应被误判为 UPDATE 关键字
-    assert ensure_safe("SELECT update_time FROM t").upper().startswith("SELECT")
+    assert ensure_safe("SELECT update_time FROM fact_sales_rank").upper().startswith("SELECT")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT * FROM users",
+        "SELECT * FROM pg_catalog.pg_user",
+        "SELECT pg_sleep(10)",
+        "SELECT * FROM generate_series(1, 1000000)",
+        "SELECT * FROM dim_brand CROSS JOIN fact_sales_rank",
+        "SELECT * FROM dim_brand JOIN fact_sales_rank",
+    ],
+)
+def test_block_non_analytics_tables_dangerous_functions_and_cross_joins(sql):
+    with pytest.raises(UnsafeSQLError):
+        ensure_safe(sql)
+
+
+def test_allow_cte_over_whitelisted_tables():
+    sql = (
+        "WITH ranked AS (SELECT series_id, volume FROM fact_sales_rank) "
+        "SELECT * FROM ranked"
+    )
+    assert ensure_safe(sql).startswith("WITH")

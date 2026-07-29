@@ -1,6 +1,6 @@
 """Celery 异步任务：把已建档(parsing)的文档异步解析入库。
 
-为什么异步（PRD-2 §19.4）：解析(MinerU/PDF)、切块、BGE 向量化都耗时（秒~分钟级），
+为什么异步（见技术设计第 5/6 节）：解析、切块、BGE 向量化耗时（秒到分钟级），
 不能阻塞上传请求。上传接口只「存 MinIO + 建 kb_document(parsing) + 投递任务」就立即返回 doc_id，
 worker 后台跑 ingest，完成置 ready/失败置 failed，前端轮询状态。
 """

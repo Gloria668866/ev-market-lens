@@ -1,7 +1,7 @@
 """应用层（读写）数据模型：用户 / 会话 / 消息 / 知识库文档。
 
 与只读分析库（dim_*/fact_*，仅供 Text2SQL 查询）分开存放在 APP_DATABASE_URL。
-所有归属用户的数据都带 user_id 外键，落实 PRD-2 §17.3「按用户隔离」。
+所有归属用户的数据都带 user_id 外键，落实技术设计第 8 节的用户隔离。
 """
 from datetime import datetime
 from typing import Optional
@@ -55,7 +55,8 @@ class KbDocument(Base):
     __tablename__ = "kb_document"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)  # 归属用户
+    # NULL = 系统公共知识；非 NULL = 用户私有知识。检索层始终取“公共 + 当前用户”。
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="ready")         # parsing/ready/failed
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

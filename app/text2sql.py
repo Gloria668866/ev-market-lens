@@ -1,12 +1,13 @@
 """Text2SQL 核心：组装 Prompt（schema + few-shot）→ 生成 SQL → 安全校验
-→ 执行 → 出错则把错误回喂模型自动修正（自校验重试闭环，见 PRD 图 2.2）。"""
+→ 执行 → 出错则把错误回喂模型自动修正（见技术设计第 4 节）。"""
 import re
+import time
 from functools import lru_cache
 from .llm import chat
 from .db import run_query
 from .sql_guard import ensure_safe, with_limit, UnsafeSQLError
 from .schema_linking import link_schema
-from .config import MAX_SQL_RETRY
+from .config import CATALOG_CACHE_TTL_SECONDS, MAX_SQL_RETRY
 
 # 领域提示：把懂车帝销量榜星型模型的语义/枚举喂给 LLM（schema introspection 只给类型，缺业务含义）
 DOMAIN = """库为「车市镜」新能源汽车销量分析库（懂车帝榜单，全国口径，月粒度）。星型模型：
@@ -201,13 +202,18 @@ SYS = """你是资深数据分析师，把用户问题翻译成一条可执行�
 """
 
 
-@lru_cache(maxsize=1)
-def _brand_catalog() -> tuple[str, ...]:
+def _catalog_cache_bucket() -> int:
+    return int(time.monotonic() // CATALOG_CACHE_TTL_SECONDS)
+
+
+@lru_cache(maxsize=2)
+def _load_brand_catalog(_bucket: int) -> tuple[str, ...]:
     """Use the analysis database as the source of truth for brand entity names."""
     try:
         _, rows = run_query(
             "SELECT DISTINCT brand_name FROM dim_brand "
-            "WHERE brand_name IS NOT NULL AND brand_name <> ''"
+            "WHERE brand_name IS NOT NULL AND brand_name <> ''",
+            limit=5000,
         )
     except Exception:
         return ()
@@ -219,13 +225,18 @@ def _brand_catalog() -> tuple[str, ...]:
     return tuple(sorted(names, key=len, reverse=True))
 
 
-@lru_cache(maxsize=1)
-def _series_catalog() -> tuple[str, ...]:
+def _brand_catalog() -> tuple[str, ...]:
+    return _load_brand_catalog(_catalog_cache_bucket())
+
+
+@lru_cache(maxsize=2)
+def _load_series_catalog(_bucket: int) -> tuple[str, ...]:
     """Known series names are used to avoid treating substrings as brands."""
     try:
         _, rows = run_query(
             "SELECT DISTINCT series_name FROM dim_series "
-            "WHERE series_name IS NOT NULL AND series_name <> ''"
+            "WHERE series_name IS NOT NULL AND series_name <> ''",
+            limit=5000,
         )
     except Exception:
         return ()
@@ -235,6 +246,16 @@ def _series_catalog() -> tuple[str, ...]:
         if str(row.get("series_name") or "").strip()
     }
     return tuple(sorted(names, key=len, reverse=True))
+
+
+def _series_catalog() -> tuple[str, ...]:
+    return _load_series_catalog(_catalog_cache_bucket())
+
+
+def clear_catalog_caches() -> None:
+    """Explicit invalidation hook for loaders/tests running in this process."""
+    _load_brand_catalog.cache_clear()
+    _load_series_catalog.cache_clear()
 
 
 def _matching_spans(text: str, token: str) -> list[tuple[int, int]]:

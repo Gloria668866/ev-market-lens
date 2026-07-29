@@ -6,11 +6,21 @@
 from app.celery_app import celery
 
 
-@celery.task(name="cron.monthly_sales_refresh", bind=True, max_retries=1)
+@celery.task(
+    name="cron.monthly_sales_refresh",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    retry_backoff_max=3600,
+    retry_jitter=True,
+    max_retries=3,
+)
 def monthly_sales_refresh(self):
     """① 增量采集销量榜（刷新 data/raw）② 清洗加载进 PG 分析库 bi。"""
     from data.crawl_sales import main as crawl_main
-    crawl_main()
+    # Celery worker 进程带有自己的 CLI 参数，显式传空 argv，避免 argparse
+    # 把 worker 参数误当成 crawl_sales 的参数解析。
+    crawl_main([])
     from deploy.load_analysis_pg import main as load_main
     load_main()
     return "refreshed"

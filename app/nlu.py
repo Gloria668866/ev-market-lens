@@ -1,17 +1,20 @@
-"""5层企业级 NLU 引擎。
+"""NLU：本地实体扫描与确定性规则主路，单次 typed LLM 兜底。
 
-Layer 1: 规则预筛（问候/超纲快速通道，不调 LLM）
-Layer 2: LLM 意图分类（单一任务，few-shot 向量检索增强）
-Layer 3: 实体抽取（独立 LLM 调用，单一任务）
-Layer 4: 槽位完整性检查（规则，来自 YAML）
-Layer 5: 业务规则覆盖（来自 YAML，业务同学可维护）
+纯寒暄和高确定性业务模式不调用模型；其余问题最多一次性返回意图、
+置信度、实体和规范化问题，再经 Pydantic、逐字段合并、槽位与业务规则
+校验。完整口径见 ``docs/technical-design.md`` 第 3 节。
 """
 import json
+import re
 import threading
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import NLU_CONFIG_PATH
 from .llm import chat
@@ -23,6 +26,48 @@ _cfg = None
 _few_shot_lock = threading.Lock()
 _few_shot_embeddings = None   # np.ndarray shape (N, embed_dim)
 _few_shot_examples = None     # list[dict]
+_few_shot_initialized = False
+
+IntentName = Literal["sql", "rag", "hybrid", "chat", "clarify"]
+_ENTITY_FIELDS = ("brands", "models", "time", "metrics", "energy_types")
+
+
+class NluModelPayload(BaseModel):
+    """Validated contract for the single fallback model call."""
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    intent: IntentName = "clarify"
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    top2_intent: Literal["", "sql", "rag", "hybrid", "chat", "clarify"] = ""
+    top2_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    brands: list[str] = Field(default_factory=list, max_length=16)
+    models: list[str] = Field(default_factory=list, max_length=16)
+    time: list[str] = Field(default_factory=list, max_length=16)
+    metrics: list[str] = Field(default_factory=list, max_length=16)
+    energy_types: list[str] = Field(default_factory=list, max_length=16)
+    normalized_question: str = ""
+
+    @field_validator(*_ENTITY_FIELDS, mode="before")
+    @classmethod
+    def entity_fields_must_be_arrays(cls, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("entity field must be a JSON array")
+        return value
+
+    @field_validator(*_ENTITY_FIELDS)
+    @classmethod
+    def normalize_entity_values(cls, values: list[str]) -> list[str]:
+        result: list[str] = []
+        for value in values:
+            if not isinstance(value, str):
+                raise ValueError("entity values must be strings")
+            cleaned = value.strip()
+            if cleaned and cleaned not in result:
+                result.append(cleaned)
+        return result
 
 
 def _load_config() -> dict:
@@ -34,22 +79,26 @@ def _load_config() -> dict:
         with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         _cfg = (raw or {}).get("nlu", {})
-    # Embed few-shot examples outside _cfg_lock to avoid blocking all threads
-    _init_few_shot(_cfg)
     return _cfg
 
 
 def _init_few_shot(cfg: dict) -> None:
     """Pre-embed few-shot examples into in-memory numpy array. Uses _few_shot_lock."""
-    global _few_shot_embeddings, _few_shot_examples
+    global _few_shot_embeddings, _few_shot_examples, _few_shot_initialized
     with _few_shot_lock:
-        if _few_shot_embeddings is not None:
+        if _few_shot_initialized:
             return
+        _few_shot_initialized = True
         examples = cfg.get("few_shot_examples") or []
         if not examples:
             return
         texts = [e.get("question", "") for e in examples if e.get("question")]
-        vecs = embed_passages(texts)
+        try:
+            vecs = embed_passages(texts)
+        except Exception:
+            # Few-shot retrieval is an optimisation, never a startup/runtime
+            # availability dependency.
+            return
         if vecs:
             _few_shot_embeddings = np.array(vecs, dtype=np.float32)
             _few_shot_examples = examples
@@ -69,13 +118,145 @@ def layer1_prefilter(question: str, last_assistant: str = "") -> dict | None:
     cfg = get_cfg()
     greetings = cfg.get("greeting_prefixes", [])
     q = question.strip()
-    if len(q) <= 8 and any(q.startswith(g) for g in greetings):
+    greeting_suffixes = {"", "呀", "啊", "哦", "哈", "呢", "哇"}
+    greeting_only = False
+    for greeting in greetings:
+        if not q.startswith(greeting):
+            continue
+        tail = q[len(greeting):].strip(" \t\r\n，,。.!！?？~～")
+        if tail in greeting_suffixes:
+            greeting_only = True
+            break
+    if greeting_only:
         return {"intent": "chat", "confidence": 1.0, "source": "layer1_greeting"}
 
     no_data_signals = cfg.get("no_data_signals", [])
     if last_assistant and any(sig in last_assistant for sig in no_data_signals):
         return {"force_rag": True}
 
+    return None
+
+
+def deterministic_intent_hint(question: str, context_block: str = "") -> str | None:
+    """Return an intent only for lexically unambiguous business patterns.
+
+    This small semantic gate stabilizes common product queries before the LLM
+    confidence gate. It deliberately leaves short generic phrases such as
+    ``销量排名`` to the normal clarify path.
+    """
+    cfg = get_cfg().get("deterministic_hints", {})
+    q = question.strip()
+
+    if not context_block and q in set(cfg.get("vague_phrases", [])):
+        return "clarify"
+
+    # Deictic references without conversation context cannot be resolved.
+    # Match a shape rather than memorising individual evaluation sentences:
+    # “这个/那个/它/哪个 + 看看/好/行不行/值得/分析…”.
+    has_unresolved_reference = bool(
+        re.search(r"(?:这个|那个|它|哪个|哪辆|哪款|这几个)", q)
+        and re.search(r"(?:看看|好(?:不好)?|行不行|靠谱|值得|入手|分析|选哪个)", q)
+    )
+    has_explicit_business_request = any(
+        word.lower() in q.lower()
+        for word in (
+            *cfg.get("structured_keywords", []),
+            *cfg.get("knowledge_keywords", []),
+        )
+    )
+    if (
+        not context_block
+        and has_unresolved_reference
+        and not has_explicit_business_request
+    ):
+        return "clarify"
+
+    # “买什么车合适”若没有预算、用途、能源类型等约束，系统无法给出
+    # 可验证的推荐。先追问，避免把宽泛购车咨询误当成知识库检索。
+    asks_purchase_recommendation = any(
+        phrase in q for phrase in cfg.get("underspecified_purchase_phrases", [])
+    ) or bool(re.search(r"(?:推荐|选|买).{0,6}(?:一款|什么|哪个|哪款)?车", q))
+    has_purchase_scope = bool(re.search(r"\d+(?:\.\d+)?\s*万", q)) or any(
+        word in q for word in cfg.get("purchase_scope_keywords", [])
+    )
+    if (
+        not context_block
+        and asks_purchase_recommendation
+        and not has_purchase_scope
+    ):
+        return "clarify"
+
+    # Some numeric-looking metrics are explicitly outside the analysis schema
+    # (charging infrastructure, exports, penetration, regulations, etc.).
+    # Route them to knowledge retrieval before the confidence gate; if the same
+    # question also asks for supported sales/price facts, it is genuinely hybrid.
+    forced_knowledge = any(
+        any(keyword in q for keyword in rule.get("if_contains", []))
+        and rule.get("force_intent") == "rag"
+        for rule in get_cfg().get("business_rules", [])
+    )
+    supported_database_fact = any(
+        keyword.lower() in q.lower()
+        for keyword in (
+            "销量", "销售量", "卖了", "卖得", "排名", "销量榜",
+            "指导价", "价格", "价位", "口碑评分",
+        )
+    )
+    if forced_knowledge:
+        return "hybrid" if supported_database_fact else "rag"
+
+    knowledge = any(word in q for word in cfg.get("knowledge_keywords", []))
+    structured = any(word.lower() in q.lower() for word in cfg.get("structured_keywords", []))
+
+    if knowledge and structured:
+        # “报告怎么评价销量/价格”是在问文档内容，不应仅因出现结构化指标就误路由
+        # 到 hybrid。只有同一句还明确要求查实际数据时才需要双脑。
+        document_framed = any(word in q for word in cfg.get("document_source_keywords", []))
+        asks_database_result = any(
+            word.lower() in q.lower()
+            for word in cfg.get("database_request_keywords", [])
+        )
+        if document_framed and not asks_database_result:
+            return "rag"
+        return "hybrid"
+    if knowledge:
+        return "rag"
+
+    # Clearly unrelated small-talk is a stable zero-call path, but only when
+    # the sentence contains no automotive/business signal.  This keeps
+    # “午饭吃什么” deterministic without swallowing questions such as
+    # “天气如何影响新能源汽车销量”.
+    off_topic = any(
+        word in q for word in cfg.get("off_topic_chat_keywords", [])
+    )
+    automotive_domain = any(
+        word.lower() in q.lower()
+        for word in cfg.get("automotive_domain_keywords", [])
+    )
+    if off_topic and not automotive_domain and not structured:
+        return "chat"
+
+    # A structured keyword alone is not enough: "销量排名" still lacks scope.
+    # Numeric price/time constraints, an explicit analytic operation, or a
+    # filter represented by the current schema make it executable.
+    has_numeric_scope = bool(
+        re.search(r"\d+(?:\.\d+)?\s*(?:万|年|月|到|至|-)", q)
+        or re.search(r"(?:前|top\s*)\d+", q, flags=re.IGNORECASE)
+    )
+    has_operation = any(word in q for word in cfg.get("sql_operation_keywords", []))
+    local_entities = _keyword_entity_scan(q)
+    has_schema_filter = any(
+        local_entities.get(field)
+        for field in ("brands", "models", "time", "energy_types")
+    ) or bool(
+        re.search(
+            r"(?:微型|小型|紧凑型|中型|中大型|大型)?(?:SUV|轿车|MPV)",
+            q,
+            flags=re.IGNORECASE,
+        )
+    )
+    if structured and (has_numeric_scope or has_operation or has_schema_filter):
+        return "sql"
     return None
 
 
@@ -132,6 +313,11 @@ def _confidence_gate(cls: dict) -> bool:
 
 def _retrieve_few_shot(question: str, top_k: int = 3) -> list:
     """余弦相似度检索 in-memory few-shot；模型不可用或未加载返回 []。"""
+    if (
+        (_few_shot_embeddings is None or _few_shot_examples is None)
+        and not _few_shot_initialized
+    ):
+        _init_few_shot(get_cfg())
     if _few_shot_embeddings is None or _few_shot_examples is None:
         return []
     qvec = embed_query(question)
@@ -155,13 +341,17 @@ def _build_few_shot_block(examples: list) -> str:
     return "\n".join(lines) + "\n\n"
 
 
-# ── Layer 2: LLM 意图分类（单一任务）─────────────────────────────────────────
+# ── Layer 2: 单次结构化 LLM 兜底 ─────────────────────────────────────────────
 
-_CLASSIFY_SYS = """\
-你是新能源汽车市场情报系统的意图分类器。只做分类，不做实体提取。返回严格 JSON（无其他文字）。
+_NLU_SYS = """\
+你是新能源汽车市场情报系统的 NLU。一次完成意图分类、实体提取和问题规范化。
+只返回严格 JSON（无 Markdown、无解释）。
 
 JSON 格式：
-{"intent":"sql|rag|hybrid|chat|clarify","confidence":0.95,"top2_intent":"rag","top2_confidence":0.08}
+{"intent":"sql|rag|hybrid|chat|clarify","confidence":0.95,
+ "top2_intent":"rag","top2_confidence":0.08,
+ "brands":[],"models":[],"time":[],"metrics":[],"energy_types":[],
+ "normalized_question":"规范化后的问题"}
 
 意图定义：
 - sql: 需要查**本系统结构化数据库**的数据。数据库仅覆盖：各品牌/车系月度销量排名、指导价、口碑评分。只有能从这些表中直接计算出来的问题才属于 sql。
@@ -176,11 +366,35 @@ JSON 格式：
 - 问「XX销量」+「为什么/特征/分析」→ hybrid
 - 仅问品牌/车系的销量、价格、排名数字 → sql
 - 涉及销量的「占比」「比重」「份额」可从数据库直接计算 → sql
+- 问候后只有品牌/车系名、没有具体问题（如「你好比亚迪」）→ clarify
+
+实体规范化：
+- brands/models/time/metrics/energy_types 必须始终为字符串数组
+- su7/SU7 保持 SU7；byd/BYD → 比亚迪
+- 今年 → 2026年，去年 → 2025年，前年 → 2024年
+- 只从当前问题提取实体；历史仅用于理解指代，不得凭空添加实体
 """
 
 
-def layer2_classify(question: str, context_block: str = "", force_rag: bool = False) -> dict:
-    """单任务 LLM 分类 + few-shot 增强。FAIL-SAFE：异常返回 clarify。"""
+def _json_object(raw: str) -> dict:
+    """Extract one JSON object from a model response."""
+    start = raw.find("{")
+    end = raw.rfind("}") + 1
+    if start < 0 or end <= start:
+        raise ValueError("no JSON object in response")
+    value = json.loads(raw[start:end])
+    if not isinstance(value, dict):
+        raise ValueError("NLU response is not a JSON object")
+    return value
+
+
+def layer2_analyze(question: str, context_block: str = "", force_rag: bool = False) -> dict:
+    """One validated LLM call for classification and entity extraction.
+
+    FAIL-SAFE: network, JSON and schema errors all become ``clarify``.  This is
+    the only model seam used by ``classify``; common deterministic paths make
+    zero NLU model calls.
+    """
     try:
         few_shot = _retrieve_few_shot(question)
         prompt = _build_few_shot_block(few_shot)
@@ -189,68 +403,48 @@ def layer2_classify(question: str, context_block: str = "", force_rag: bool = Fa
         prompt += question
 
         raw = chat([
-            {"role": "system", "content": _CLASSIFY_SYS},
+            {"role": "system", "content": _NLU_SYS},
             {"role": "user", "content": prompt},
         ], temperature=0.0)
-        s, e = raw.find("{"), raw.rfind("}") + 1
-        if s < 0 or e <= s:
-            raise ValueError("no JSON in response")
-        r = json.loads(raw[s:e])
-        intent = r.get("intent", "clarify")
-        if intent not in ("sql", "rag", "hybrid", "chat", "clarify"):
-            intent = "clarify"
+        parsed = NluModelPayload.model_validate(_json_object(raw))
+        result = parsed.model_dump()
+        intent = result["intent"]
         if force_rag and intent in ("sql", "hybrid"):
             intent = "rag"
-        return {
-            "intent": intent,
-            "confidence": min(1.0, max(0.0, float(r.get("confidence", 0.8)))),
-            "top2_intent": r.get("top2_intent", ""),
-            "top2_confidence": float(r.get("top2_confidence") or 0.0),
-            "source": "layer2_llm",
-        }
+        result.update(intent=intent, source="layer2_llm")
+        if not result.get("normalized_question"):
+            result["normalized_question"] = question
+        return result
     except Exception:
-        return {"intent": "clarify", "confidence": 0.5,
-                "top2_intent": "", "top2_confidence": 0.0,
-                "source": "layer2_fallback"}
+        # Keep one uniform fail-closed contract.  The broad catch also covers
+        # provider/network failures from chat().
+        return {
+            "intent": "clarify",
+            "confidence": 0.5,
+            "top2_intent": "",
+            "top2_confidence": 0.0,
+            **{field: [] for field in _ENTITY_FIELDS},
+            "normalized_question": question,
+            "source": "layer2_fallback",
+        }
 
 
-# ── Layer 3: 实体抽取（独立 LLM 调用）────────────────────────────────────────
-
-_ENTITY_SYS = """\
-你是实体提取器，只做实体提取和规范化，不做意图判断。从新能源汽车问题中提取实体，返回严格 JSON（无其他文字）。
-
-JSON 格式：
-{"brands":[],"models":[],"time":[],"metrics":[],"energy_types":[],"normalized_question":"规范化后的问题"}
-
-规范化规则：su7/SU7不变, byd/BYD→比亚迪, 今年→2026年, 去年→2025年, 前年→2024年
-只从当前问题提取实体，忽略历史记录中的实体。
-"""
+def layer2_classify(question: str, context_block: str = "", force_rag: bool = False) -> dict:
+    """Compatibility view over the single-call analysis seam."""
+    result = layer2_analyze(question, context_block, force_rag)
+    return {
+        key: result[key]
+        for key in ("intent", "confidence", "top2_intent", "top2_confidence", "source")
+    }
 
 
 def layer3_extract_entities(question: str, context_block: str = "") -> dict:
-    """独立 LLM 实体抽取。FAIL-SAFE：异常返回空实体 + 原始问题。"""
-    prompt = (context_block + "\n\n" if context_block else "") + question
-    empty = {"brands": [], "models": [], "time": [], "metrics": [],
-             "energy_types": [], "normalized_question": question}
-    try:
-        raw = chat([
-            {"role": "system", "content": _ENTITY_SYS},
-            {"role": "user", "content": prompt},
-        ], temperature=0.0)
-        s, e = raw.find("{"), raw.rfind("}") + 1
-        if s < 0 or e <= s:
-            return empty
-        r = json.loads(raw[s:e])
-        return {
-            "brands": r.get("brands") or [],
-            "models": r.get("models") or [],
-            "time": r.get("time") or [],
-            "metrics": r.get("metrics") or [],
-            "energy_types": r.get("energy_types") or [],
-            "normalized_question": r.get("normalized_question") or question,
-        }
-    except Exception:
-        return empty
+    """Compatibility view; the main pipeline no longer makes a second call."""
+    result = layer2_analyze(question, context_block)
+    return {
+        **{field: result[field] for field in _ENTITY_FIELDS},
+        "normalized_question": result.get("normalized_question") or question,
+    }
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -291,22 +485,68 @@ _KEYWORD_TIME = frozenset([
 
 
 def _keyword_entity_scan(question: str) -> dict:
-    """Deterministic keyword scan for brand/model/time entities.
-    Used as fallback when LLM entity extraction returns empty results.
-    Brands loaded from config (nlu.yaml keyword_brands) for easy extension.
+    """Deterministic, per-field entity extraction.
+
+    Local matches are always merged with model output rather than only used
+    when every model field is empty.  That prevents a partially-correct model
+    response (time found, brand missed) from discarding reliable dictionary
+    evidence.
     """
     result = {"brands": [], "models": [], "time": [], "metrics": [], "energy_types": []}
     brands = _get_keyword_brands()
-    for brand in brands:
+    for brand in sorted(brands, key=len, reverse=True):
         if brand in question:
             result["brands"].append(brand)
-    for model in _KEYWORD_MODELS:
+    for model in sorted(_KEYWORD_MODELS, key=len, reverse=True):
         if model.lower() in question.lower():
             result["models"].append(model)
-    for time_word in _KEYWORD_TIME:
+
+    for absolute in re.findall(r"20\d{2}(?:年(?:\d{1,2}月)?)?", question):
+        normalized = absolute if absolute.endswith(("年", "月")) else f"{absolute}年"
+        if normalized not in result["time"]:
+            result["time"].append(normalized)
+    current_year = datetime.now().year
+    relative_time = {
+        "今年": f"{current_year}年",
+        "去年": f"{current_year - 1}年",
+        "前年": f"{current_year - 2}年",
+        "本月": "本月",
+        "这个月": "本月",
+        "上月": "上月",
+        "上个月": "上月",
+    }
+    for time_word in sorted(_KEYWORD_TIME, key=len, reverse=True):
         if time_word in question:
-            result["time"].append(time_word)
+            normalized = relative_time.get(
+                time_word,
+                f"{time_word}年" if time_word.isdigit() and len(time_word) == 4 else time_word,
+            )
+            if normalized not in result["time"]:
+                result["time"].append(normalized)
+
+    cfg = get_cfg()
+    for metric in cfg.get("entity_metric_keywords", []):
+        if metric.lower() in question.lower() and metric not in result["metrics"]:
+            result["metrics"].append(metric)
+    for canonical, aliases in (cfg.get("entity_energy_keywords") or {}).items():
+        if any(str(alias).lower() in question.lower() for alias in aliases):
+            result["energy_types"].append(canonical)
     return result
+
+
+def _merge_entity_sources(local: dict, model: dict) -> dict:
+    """Merge trusted local lexicon hits with validated model entities."""
+    merged: dict[str, list[str]] = {}
+    for field in _ENTITY_FIELDS:
+        values: list[str] = []
+        for source in (local, model):
+            for value in source.get(field, []) or []:
+                if isinstance(value, str):
+                    cleaned = value.strip()
+                    if cleaned and cleaned not in values:
+                        values.append(cleaned)
+        merged[field] = values[:16]
+    return merged
 
 
 def classify(
@@ -315,43 +555,77 @@ def classify(
     context_block: str = "",
     last_assistant: str = "",
 ) -> dict:
-    """5层 NLU 完整流程。
+    """Layered NLU with zero model calls on deterministic paths and one otherwise.
 
     Returns dict with keys:
         intent, confidence, entities, is_complete, missing_slots,
         normalized_question, source
     """
     _ = history  # reserved for future multi-turn use; context_block already built by caller
+    started = time.perf_counter()
+
+    def finish(payload: dict, *, llm_calls: int) -> dict:
+        payload["llm_calls"] = llm_calls
+        payload["nlu_latency_ms"] = round((time.perf_counter() - started) * 1000, 2)
+        return payload
+
+    local_entities = _keyword_entity_scan(question)
 
     # Layer 1
     l1 = layer1_prefilter(question, last_assistant)
     if l1 and "intent" in l1:
-        return {"intent": l1["intent"], "confidence": l1["confidence"],
-                "entities": {}, "is_complete": True, "missing_slots": [],
-                "normalized_question": question, "source": l1["source"]}
+        return finish({
+            "intent": l1["intent"],
+            "confidence": l1["confidence"],
+            "entities": local_entities,
+            "is_complete": True,
+            "missing_slots": [],
+            "normalized_question": question,
+            "source": l1["source"],
+        }, llm_calls=0)
     force_rag = bool(l1 and l1.get("force_rag"))
 
     # Layer 2
-    l2 = layer2_classify(question, context_block, force_rag=force_rag)
+    hint = None if force_rag else deterministic_intent_hint(question, context_block)
+    if hint == "clarify":
+        return finish({
+            "intent": "clarify",
+            "confidence": 1.0,
+            "entities": local_entities,
+            "is_complete": False,
+            "missing_slots": ["缺少明确对象或问题，请补充你想分析的车型、指标或背景"],
+            "normalized_question": question,
+            "source": "deterministic_hint",
+        }, llm_calls=0)
+    if hint:
+        l2 = {
+            "intent": hint,
+            "confidence": 1.0,
+            "top2_intent": "",
+            "top2_confidence": 0.0,
+            "source": "deterministic_hint",
+            **{field: [] for field in _ENTITY_FIELDS},
+            "normalized_question": question,
+        }
+        llm_calls = 0
+    else:
+        l2 = layer2_analyze(question, context_block, force_rag=force_rag)
+        llm_calls = 1
 
     # Confidence gate → clarify if ambiguous
     if not _confidence_gate(l2):
-        return {"intent": "clarify", "confidence": l2["confidence"],
-                "entities": {}, "is_complete": False,
-                "missing_slots": ["问题意图不明确，请描述得更具体"],
-                "normalized_question": question, "source": "confidence_gate"}
+        return finish({
+            "intent": "clarify",
+            "confidence": l2["confidence"],
+            "entities": local_entities,
+            "is_complete": False,
+            "missing_slots": ["问题意图不明确，请描述得更具体"],
+            "normalized_question": question,
+            "source": "confidence_gate",
+        }, llm_calls=llm_calls)
 
-    # Layer 3 (only for data-related intents)
-    if l2["intent"] in ("sql", "rag", "hybrid"):
-        l3 = layer3_extract_entities(question, context_block)
-        # Fallback: if LLM entity extraction returned empty brands, use keyword scan
-        if not any(l3.get(k) for k in ("brands", "models", "time", "metrics", "energy_types")):
-            kw_entities = _keyword_entity_scan(question)
-            if any(kw_entities.get(k) for k in ("brands", "models", "time")):
-                l3 = {**l3, **kw_entities}
-    else:
-        l3 = {"brands": [], "models": [], "time": [], "metrics": [],
-              "energy_types": [], "normalized_question": question}
+    model_entities = {field: l2.get(field, []) for field in _ENTITY_FIELDS}
+    entities = _merge_entity_sources(local_entities, model_entities)
 
     # Layer 5 (before completeness check so forced rag skips slot check)
     # Only apply business rules to data intents, not chat/clarify
@@ -360,17 +634,28 @@ def classify(
     else:
         final_intent = l2["intent"]
 
+    # A greeting plus a recognised business entity is not pure small talk.  If
+    # no actual question was expressed, ask for scope instead of silently
+    # routing to chat ("你好比亚迪").
+    if final_intent == "chat" and any(entities.get(k) for k in ("brands", "models")):
+        final_intent = "clarify"
+        source = "mixed_greeting_guard"
+    else:
+        source = l2["source"]
+
     # Layer 4
-    is_complete, missing = layer4_check_completeness(final_intent, l3, question)
+    is_complete, missing = layer4_check_completeness(final_intent, entities, question)
     if not is_complete and final_intent in ("sql", "hybrid"):
         final_intent = "clarify"
+    if final_intent == "clarify" and not missing:
+        missing = ["请说明你想查询销量、价格，还是了解政策、口碑或行业分析"]
 
-    return {
+    return finish({
         "intent": final_intent,
         "confidence": l2["confidence"],
-        "entities": {k: l3[k] for k in ("brands", "models", "time", "metrics", "energy_types")},
-        "is_complete": is_complete or final_intent not in ("sql", "hybrid"),
+        "entities": entities,
+        "is_complete": False if final_intent == "clarify" else is_complete,
         "missing_slots": missing,
-        "normalized_question": l3.get("normalized_question", question),
-        "source": l2["source"],
-    }
+        "normalized_question": l2.get("normalized_question") or question,
+        "source": source,
+    }, llm_calls=llm_calls)

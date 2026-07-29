@@ -16,6 +16,9 @@
 	handle /health {
 		reverse_proxy api:8000
 	}
+	handle /ready {
+		reverse_proxy api:8000
+	}
 
 	# 前端 SPA：静态文件 + 找不到则回 index.html（前端路由）
 	handle {

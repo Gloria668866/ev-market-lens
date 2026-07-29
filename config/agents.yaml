@@ -13,6 +13,7 @@ pipeline:
       agent: code_agent
       depends_on: [plan]
       parallel: true               # one instance per plan item
+      max_parallel: 3              # bounded fan-out; protects API quota and 2C8G demo hosts
       description: "Execute web collection in parallel"
     - id: review
       agent: review_agent

@@ -11,6 +11,22 @@ name: carmirror-prod
 
 x-app-env: &app-env            # api/worker/beat 共用的运行时环境
   env_file: [../.env.prod]
+  environment:
+    # 这是唯一的生产编排入口；不能因为旧 .env.prod 漏键而静默退回
+    # development/local RAG/进程内任务队列。
+    APP_ENV: production
+    RAG_BACKEND: pg
+    PIPELINE_LOCAL_FALLBACK: "false"
+    TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+    BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
+    SEARCH_API_TIMEOUT_SECONDS: ${SEARCH_API_TIMEOUT_SECONDS:-8}
+    TAVILY_SEARCH_DEPTH: ${TAVILY_SEARCH_DEPTH:-basic}
+    # 2C 演示机上 API 与 Celery 可能同时执行 PyTorch 推理；限制每个进程的
+    # 底层线程，避免两个单进程各自抢满全部 CPU/放大内存峰值。
+    OMP_NUM_THREADS: ${OMP_NUM_THREADS:-1}
+    MKL_NUM_THREADS: ${MKL_NUM_THREADS:-1}
+    TOKENIZERS_PARALLELISM: ${TOKENIZERS_PARALLELISM:-false}
+    MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-2}
 
 services:
   # ---------- PostgreSQL 16 + pgvector（分析库 bi + 应用库 app，双角色）----------
@@ -90,6 +106,16 @@ services:
         echo ">> buckets ready"
     restart: "no"
 
+  # ---------- 旧 PG 数据卷的幂等 schema 迁移 ----------
+  migrate:
+    image: carmirror-app:latest
+    container_name: carmirror-migrate
+    restart: "no"
+    <<: *app-env
+    command: ["python", "deploy/migrate_app_pg.py"]
+    depends_on:
+      postgres: {condition: service_healthy}
+
   # ---------- FastAPI ----------
   api:
     build:
@@ -101,15 +127,17 @@ services:
     container_name: carmirror-api
     restart: always
     <<: *app-env
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "${API_WORKERS:-1}"]
     volumes:
-      - ${MODELS_DIR:-./models}:/models:ro     # BGE + reranker 权重（挂载持久化，避免每次重下）
+      - ${MODELS_DIR:-../models}:/models:ro     # BGE + reranker 权重（挂载持久化，避免每次重下）
     depends_on:
+      migrate: {condition: service_completed_successfully}
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       minio: {condition: service_healthy}
     expose: ["8000"]                 # 仅内网；公网由 caddy 反代
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ready >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -121,13 +149,14 @@ services:
     container_name: carmirror-worker
     restart: always
     <<: *app-env
-    command: ["celery", "-A", "app.celery_app.celery", "worker", "--concurrency=2", "-l", "info"]
+    command: ["celery", "-A", "app.celery_app.celery", "worker", "--concurrency=${CELERY_CONCURRENCY:-1}", "-l", "info"]
     volumes:
-      - ${MODELS_DIR:-./models}:/models:ro
-      - crawlraw:/app/data/raw          # 定时采集产物持久化（月度增量累积 + load 读取）
+      - ${MODELS_DIR:-../models}:/models:ro
+      - ../data/raw:/app/data/raw       # 与首批 SCP/人工 load 共用同一份完整 raw 快照
     depends_on:
       redis: {condition: service_healthy}
       postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       api: {condition: service_started}
 
   # ---------- Celery beat（定时：月度增量采集 + 每日备份）----------
@@ -164,4 +193,3 @@ volumes:
   redisdata:
   caddydata:
   caddyconfig:
-  crawlraw:        # 定时采集的原始数据（worker 写/读）

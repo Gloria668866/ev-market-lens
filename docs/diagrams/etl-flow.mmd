@@ -1,0 +1,22 @@
+flowchart TB
+    R[("销量 JSONL<br/>真实公开数据")] --> READ["逐行读取并校验<br/>month / energy_type / series_id"]
+    READ --> DEDUPE["按 month + energy_type + series_id 去重"]
+    DEDUPE --> NORM["空值、文本、价格、排名、月份类型转换"]
+    NORM --> DIMB["upsert dim_brand"]
+    NORM --> DIMS["upsert dim_series<br/>动力类型与价格快照"]
+    NORM --> DIMD["upsert dim_date<br/>date_id = YYYYMM"]
+    DIMB --> FACTS["在单事务内全量替换三个事实表<br/>fact_sales_rank / fact_price / fact_review"]
+    DIMS --> FACTS
+    DIMD --> FACTS
+
+    TARGET{"加载目标"}
+    FACTS --> TARGET
+    TARGET -->|"clean_load.py"| SQLITE[("本地 SQLite")]
+    TARGET -->|"load_analysis_pg.py"| PG[("生产 PostgreSQL")]
+
+    SAMPLE["seed_real.py"] --> SYN[("确定性合成演示库")]
+    WARNING["合成样例不代表市场事实；文档知识走独立 RAG 入库链，不混入此 ETL"]
+    SYN -.-> WARNING
+    classDef p fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    classDef s fill:#E6F4EA,stroke:#34A853,color:#000;
+    class READ,DEDUPE,NORM,DIMB,DIMS,DIMD,FACTS,TARGET p; class R,SQLITE,PG,SAMPLE,SYN s;

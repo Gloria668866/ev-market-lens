@@ -1,6 +1,6 @@
 """对象存储（MinIO）：上传/爬取的原始文件先落 MinIO，再异步解析。
 
-为什么先存对象存储再解析（PRD-2 §5.2）：
+为什么生产 PG 路径先存对象存储再解析（见技术设计第 5.1 节）：
 - 原始文件与解析解耦——解析失败可重放、可换解析器重跑，不用让用户重传。
 - source_uri（bucket/object）记进 kb_document，做血缘溯源。
 """
@@ -26,10 +26,11 @@ def client() -> Minio:
     return _client
 
 
-def put_bytes(user_id: int, filename: str, data: bytes, content_type="application/octet-stream") -> str:
+def put_bytes(user_id: int | None, filename: str, data: bytes, content_type="application/octet-stream") -> str:
     """存原始文件，返回 source_uri（bucket/object_name）。object 名带 user_id + 时间戳防撞。"""
     ts = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    object_name = f"u{user_id}/{ts}_{filename}"
+    owner = "system" if user_id is None else f"u{user_id}"
+    object_name = f"{owner}/{ts}_{filename}"
     c = client()
     c.put_object(MINIO_BUCKET_UPLOADS, object_name, io.BytesIO(data), length=len(data),
                  content_type=content_type)
@@ -45,3 +46,14 @@ def get_bytes(source_uri: str) -> bytes:
     finally:
         resp.close()
         resp.release_conn()
+
+
+def remove_source(source_uri: str | None) -> bool:
+    """Idempotently remove one MinIO object referenced by ``bucket/object``."""
+    if not source_uri:
+        return False
+    bucket, separator, object_name = source_uri.partition("/")
+    if not separator or not bucket or not object_name:
+        return False
+    client().remove_object(bucket, object_name)
+    return True
