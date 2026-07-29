@@ -192,18 +192,17 @@ def main():
     results = run()
     ok = sum(r["success"] for r in results)
     os.makedirs(REPORT_DIR, exist_ok=True)
+    # Capture provenance before opening the tracked report for writing.
+    # Opening with mode="w" truncates the file immediately and would otherwise
+    # make an initially clean evaluation checkout report itself as dirty.
+    payload = {
+        "total": len(results),
+        "passed": ok,
+        "results": results,
+        "_meta": _build_meta(),
+    }
     with open(os.path.join(REPORT_DIR, "data_quality.json"), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "total": len(results),
-                "passed": ok,
-                "results": results,
-                "_meta": _build_meta(),
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"数据质量：{ok}/{len(results)} 通过")
     for r in results:
         if not r["success"]:
