@@ -101,7 +101,7 @@ flowchart TD
 
 Few-shot BGE 只在进入模型兜底路径时惰性加载；模型或向量不可用时不影响规则主路。多轮上下文只在代词或省略型追问中继承。一个信息完整的新问题会重置活跃实体；SQL 审核还会阻止当前问题未提及的历史品牌条件泄漏到新查询。
 
-2026-07-29 实跑 110 条五分类固定回归集为 110/110（100.0%）。修复三轮模型漂移后，这个固定集已全部命中确定性规则：0/110 次模型调用，端到端路由 p50 0.05 ms、p95 0.16 ms。集合中仍有 7 条与配置里的 few-shot 文本完全相同，但本次路径没有加载 few-shot 或调用模型。这个结果只证明常见表达的路由回归稳定，不是独立留出集、线上泛化率，也没有衡量新问题的 LLM 兜底准确率；最终以 [`eval/reports/intent.json`](../eval/reports/intent.json) 为准。
+2026-07-29 实跑 110 条五分类固定回归集为 110/110（100.0%）。修复三轮模型漂移后，这个固定集已全部命中确定性规则：0/110 次模型调用，端到端路由延迟分位记录在提交报告中。集合中仍有 7 条与配置里的 few-shot 文本完全相同，但本次路径没有加载 few-shot 或调用模型。这个结果只证明常见表达的路由回归稳定，不是独立留出集、线上泛化率，也没有衡量新问题的 LLM 兜底准确率；最终以 [`eval/reports/intent.json`](../eval/reports/intent.json) 为准。
 
 ## 4. Text2SQL
 
@@ -256,7 +256,7 @@ flowchart LR
     C1 --> REVIEW["Review"]
     C2 --> REVIEW
     C3 --> REVIEW
-    REVIEW --> CHECK{"should_write_rag？"}
+    REVIEW --> CHECK{"should_write_to_rag？"}
     CHECK -->|是| PRIVATE["发起用户私有 RAG"]
     CHECK -->|否| RESULT["只保留任务结果"]
 ```
@@ -331,8 +331,8 @@ stage / intent / sql / rows / chart / collection / insight / citation / done / e
 
 | 类型 | 方法 | 当前口径 |
 |---|---|---|
-| Text2SQL | 执行结果集等价比较 | 固定 60 题回归集 60/60；首次 59/60 |
-| Intent | 110 条五分类固定回归集、混淆矩阵、per-class P/R/F1、调用与延迟统计 | 当前 110/110；固定集 0 次 LLM 调用、零调用率 100%，p50 0.05 ms、p95 0.16 ms；不覆盖新问题的 LLM 兜底泛化 |
+| Text2SQL | 执行结果集等价比较 | 固定 60 题回归集 60/60；首轮与重试明细见提交报告 |
+| Intent | 110 条五分类固定回归集、混淆矩阵、per-class P/R/F1、调用与延迟统计 | 当前 110/110；固定集 0 次 LLM 调用、零调用率 100%，延迟分位见提交报告；不覆盖新问题的 LLM 兜底泛化 |
 | RAG | 检索、rerank、证据门控、父块归并、人工原子 claim 支持与负样本拒答 | 本地 SQLite + numpy：13/13 正样本严格通过；claim 来源、归并上下文、关键锚点支持率均为 100%；7/7 负样本拒答 |
 | Data quality | 表行数、非空、枚举、唯一键、外键等断言 | 以当前报告为准 |
 | Tests | pytest 与前端 build | 不在文档硬编码测试数量 |
