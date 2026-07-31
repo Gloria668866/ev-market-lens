@@ -19,6 +19,225 @@ def _client():
 def test_health_ok():
     r = _client().get("/health")
     assert r.status_code == 200 and r.json().get("ok") is True
+    assert "ready" in r.json()
+    assert "services" in r.json()
+    assert r.json()["services"]["model_probe"] == "artifact"
+
+
+def test_deep_health_uses_real_model_probe():
+    with patch("app.main._deep_health_cache", None), patch(
+        "app.main._deep_model_health",
+        return_value=(False, False),
+    ) as probe:
+        r = _client().get("/health?deep=true")
+    probe.assert_called_once_with()
+    assert r.status_code == 200
+    assert r.json()["status"] == "degraded"
+    assert r.json()["services"]["embedding"] is False
+    assert r.json()["services"]["reranker"] is False
+    assert r.json()["services"]["model_probe"] == "inference"
+
+
+def test_readiness_returns_503_when_degraded():
+    with patch("app.main._health_payload", return_value={
+        "ok": True,
+        "ready": False,
+        "status": "degraded",
+        "services": {},
+    }):
+        r = _client().get("/ready")
+    assert r.status_code == 503
+    assert r.json()["ready"] is False
+
+
+def test_readiness_returns_200_only_when_fully_healthy():
+    with patch("app.main._health_payload", return_value={
+        "ok": True,
+        "ready": True,
+        "status": "healthy",
+        "services": {},
+    }):
+        r = _client().get("/ready")
+    assert r.status_code == 200
+    assert r.json()["status"] == "healthy"
+
+
+def test_missing_retrievable_embeddings_fail_readiness_and_request_reindex():
+    from unittest.mock import MagicMock
+
+    import app.main as main
+
+    connection = MagicMock()
+    connection.execute.return_value.first.return_value = (1,)
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = connection
+    vector_stats = {
+        "retrievable": 3,
+        "compatible": 2,
+        "missing": 1,
+        "legacy": 0,
+        "mismatched": 0,
+    }
+
+    with patch.object(main, "bi_engine", engine), patch.object(
+        main,
+        "app_engine",
+        engine,
+    ), patch.object(main, "RAG_BACKEND", "local"), patch.object(
+        main,
+        "KB_ROUTER_LOADED",
+        True,
+    ), patch(
+        "app.rag.local_store.embedding_compatibility_stats",
+        return_value=vector_stats,
+    ), patch(
+        "app.agent_pipeline._redis_available",
+        return_value=True,
+    ), patch.object(
+        main,
+        "_model_artifact_available",
+        return_value=True,
+    ), patch.object(
+        main,
+        "_llm_config_ready",
+        return_value=True,
+    ):
+        payload = main._health_payload()
+
+    assert payload["ready"] is False
+    assert payload["services"]["embedding_store_compatible"] is False
+    assert payload["services"]["reindex_required"] is True
+
+
+def test_production_readiness_requires_an_official_search_provider():
+    from unittest.mock import MagicMock
+
+    import app.main as main
+
+    connection = MagicMock()
+    connection.execute.return_value.first.return_value = (1,)
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = connection
+    vector_stats = {
+        "retrievable": 2,
+        "compatible": 2,
+        "missing": 0,
+        "legacy": 0,
+        "mismatched": 0,
+    }
+    search_status = {
+        "official_api_ready": False,
+        "primary_provider": None,
+        "mode": "html_fallback_only",
+        "providers": {
+            "tavily": {"configured": False},
+            "brave": {"configured": False},
+        },
+        "html_fallback_enabled": True,
+        "last_attempt": None,
+    }
+
+    with patch.object(main, "bi_engine", engine), patch.object(
+        main,
+        "app_engine",
+        engine,
+    ), patch.object(main, "IS_PRODUCTION", True), patch.object(
+        main,
+        "RAG_BACKEND",
+        "local",
+    ), patch.object(main, "KB_ROUTER_LOADED", True), patch(
+        "app.rag.local_store.embedding_compatibility_stats",
+        return_value=vector_stats,
+    ), patch(
+        "app.agent_tools.search_provider_status",
+        return_value=search_status,
+    ), patch(
+        "app.agent_pipeline._redis_available",
+        return_value=True,
+    ), patch.object(
+        main,
+        "_model_artifact_available",
+        return_value=True,
+    ), patch.object(
+        main,
+        "_llm_config_ready",
+        return_value=True,
+    ):
+        payload = main._health_payload()
+
+    assert payload["ready"] is False
+    assert payload["services"]["web_search_official_api"] is False
+    assert payload["services"]["web_search"]["mode"] == "html_fallback_only"
+
+
+def test_model_artifact_check_rejects_truncated_safetensors(tmp_path):
+    from app.main import _model_artifact_available
+
+    model_dir = tmp_path / "broken-bge"
+    model_dir.mkdir()
+    (model_dir / "model.safetensors").write_bytes(b"truncated")
+
+    assert _model_artifact_available(str(model_dir)) is False
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("", False),
+        ("sk-REPLACE_WITH_YOUR_PROVIDER_KEY", False),
+        ("changeMe", False),
+        ("real-provider-token", True),
+    ],
+)
+def test_llm_config_readiness_rejects_placeholders(value, expected):
+    from app.main import _llm_config_ready
+
+    assert _llm_config_ready(value) is expected
+
+
+@pytest.mark.parametrize(
+    ("value", "min_length", "expected"),
+    [
+        ("REPLACE_WITH_64_HEX_RANDOM", 32, False),
+        ("REPLACE_WITH_STRONG_ADMIN_PASSWORD", 12, False),
+        ("short", 12, False),
+        ("3b6066803cf74666a783ec72405cc0f1", 32, True),
+        ("long-and-private-admin-password", 12, True),
+    ],
+)
+def test_production_secret_readiness_rejects_public_templates(
+    value,
+    min_length,
+    expected,
+):
+    from app.main import _configured_secret_ready
+
+    assert _configured_secret_ready(value, min_length) is expected
+
+
+def test_bootstrap_admin_refuses_to_promote_existing_regular_user(monkeypatch):
+    from app.auth import bootstrap_admin
+    from app.database import SessionLocal
+    from app.models import User
+    from app.security import hash_password
+
+    username = f"collision_{int(time.time() * 1000)}"
+    monkeypatch.setenv("ADMIN_USERNAME", username)
+    monkeypatch.setenv("ADMIN_PASSWORD", "long-private-admin-password")
+    with SessionLocal() as db:
+        user = User(
+            username=username,
+            password_hash=hash_password("regular-password"),
+            role="user",
+        )
+        db.add(user)
+        db.commit()
+        with pytest.raises(RuntimeError, match="拒绝静默提权"):
+            bootstrap_admin(db)
+        db.refresh(user)
+        assert user.role == "user"
+        db.delete(user)
+        db.commit()
 
 
 def test_ask_requires_auth():
@@ -29,6 +248,231 @@ def test_ask_requires_auth():
 def test_history_requires_auth():
     r = _client().get("/api/history")
     assert r.status_code in (401, 403)
+
+
+def test_public_registration_can_be_disabled():
+    with patch("app.auth.ALLOW_PUBLIC_REGISTRATION", False):
+        r = _client().post("/api/auth/register", json={
+            "username": f"closed_{int(time.time() * 1000)}",
+            "password": "pw123456",
+        })
+    assert r.status_code == 403
+    assert "关闭公开注册" in r.json()["detail"]
+
+
+def test_daily_question_limit_blocks_before_agent_call():
+    from app.database import SessionLocal
+    from app.models import Conversation, Message, User
+    from sqlalchemy import select
+
+    client = _client()
+    uname = f"quota_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={"username": uname, "password": "pw123456"})
+    token = client.post(
+        "/api/auth/login",
+        json={"username": uname, "password": "pw123456"},
+    ).json()["access_token"]
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == uname))
+        conv = Conversation(user_id=user.id, title="quota")
+        db.add(conv)
+        db.flush()
+        db.add(Message(
+            conversation_id=conv.id,
+            user_id=user.id,
+            role="user",
+            content="already used",
+        ))
+        db.commit()
+    with patch("app.main.DAILY_QUESTION_LIMIT", 1), patch("app.main.run_agent") as agent:
+        r = client.post(
+            "/api/ask_sync",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "should be blocked"},
+        )
+    assert r.status_code == 429
+    agent.assert_not_called()
+
+
+def test_sse_rejects_when_bounded_agent_pool_is_full():
+    client = _client()
+    uname = f"quota_pool_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={
+        "username": uname,
+        "password": "pw123456",
+    })
+    token = client.post("/api/auth/login", json={
+        "username": uname,
+        "password": "pw123456",
+    }).json()["access_token"]
+
+    class FullPool:
+        def acquire(self, blocking=False):
+            return False
+
+    with patch("app.main._ASK_SLOTS", FullPool()), patch(
+        "app.main._ASK_EXECUTOR"
+    ) as executor:
+        response = client.post(
+            "/api/ask",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "should fail before reservation"},
+        )
+
+    assert response.status_code == 503
+    assert "分析任务已满" in response.json()["detail"]
+    executor.submit.assert_not_called()
+
+
+def test_kb_ask_shares_quota_and_persists_history():
+    from app.database import SessionLocal
+    from app.models import Message, User
+    from sqlalchemy import select
+
+    client = _client()
+    username = f"kb_history_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={
+        "username": username,
+        "password": "pw123456",
+    })
+    token = client.post("/api/auth/login", json={
+        "username": username,
+        "password": "pw123456",
+    }).json()["access_token"]
+    with patch(
+        "app.rag.retrieve.answer_question",
+        return_value={
+            "answer": "有引用的答案",
+            "citations": [{"doc_id": 1, "page_no": 1, "chunk_id": 2}],
+            "has_answer": True,
+        },
+    ):
+        response = client.post(
+            "/api/kb/ask",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "知识库问题"},
+        )
+    assert response.status_code == 200, response.text
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == username))
+        messages = db.scalars(
+            select(Message).where(Message.user_id == user.id).order_by(Message.id),
+        ).all()
+    assert [message.role for message in messages[-2:]] == ["user", "assistant"]
+    assert messages[-1].content == "有引用的答案"
+
+
+def test_kb_ask_rejects_when_shared_capacity_is_full():
+    client = _client()
+    username = f"kb_pool_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={
+        "username": username,
+        "password": "pw123456",
+    })
+    token = client.post("/api/auth/login", json={
+        "username": username,
+        "password": "pw123456",
+    }).json()["access_token"]
+
+    class FullPool:
+        def acquire(self, blocking=False):
+            return False
+
+    with patch("app.kb._ASK_SLOTS", FullPool()), patch(
+        "app.rag.retrieve.answer_question",
+    ) as answer:
+        response = client.post(
+            "/api/kb/ask",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "知识库问题"},
+        )
+
+    assert response.status_code == 503
+    assert "分析任务已满" in response.json()["detail"]
+    answer.assert_not_called()
+
+
+def test_sync_ask_rejects_when_shared_capacity_is_full():
+    client = _client()
+    username = f"sync_pool_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={
+        "username": username,
+        "password": "pw123456",
+    })
+    token = client.post("/api/auth/login", json={
+        "username": username,
+        "password": "pw123456",
+    }).json()["access_token"]
+
+    class FullPool:
+        def acquire(self, blocking=False):
+            return False
+
+    with patch("app.main._ASK_SLOTS", FullPool()), patch("app.main.run_agent") as agent:
+        response = client.post(
+            "/api/ask_sync",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "同步问题"},
+        )
+
+    assert response.status_code == 503
+    assert "分析任务已满" in response.json()["detail"]
+    agent.assert_not_called()
+
+
+def test_kb_upload_rejects_oversized_body_while_streaming():
+    client = _client()
+    username = f"kb_upload_{int(time.time() * 1000)}"
+    client.post("/api/auth/register", json={
+        "username": username,
+        "password": "pw123456",
+    })
+    token = client.post("/api/auth/login", json={
+        "username": username,
+        "password": "pw123456",
+    }).json()["access_token"]
+    with patch("app.kb.MAX_UPLOAD_MB", 1):
+        response = client.post(
+            "/api/kb/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": ("large.md", b"x" * (1024 * 1024 + 1), "text/markdown")},
+        )
+    assert response.status_code == 413
+
+
+def test_task_stream_isolated_between_users():
+    from app.agent_pipeline import _set_progress
+    from app.database import SessionLocal
+    from app.models import User
+    from sqlalchemy import select
+
+    client = _client()
+    owner_name = f"task_owner_{int(time.time() * 1000)}"
+    other_name = f"task_other_{int(time.time() * 1000)}"
+    for name in (owner_name, other_name):
+        client.post("/api/auth/register", json={
+            "username": name,
+            "password": "pw123456",
+        })
+    with SessionLocal() as db:
+        owner = db.scalar(select(User).where(User.username == owner_name))
+        owner_id = owner.id
+    other_token = client.post("/api/auth/login", json={
+        "username": other_name,
+        "password": "pw123456",
+    }).json()["access_token"]
+
+    task_id = f"private_task_{int(time.time() * 1000)}"
+    _set_progress(task_id, {
+        "stage": "queued",
+        "status": "pending",
+        "user_id": owner_id,
+    })
+    response = client.get(
+        f"/api/tasks/{task_id}/stream",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------- 禁用账号鉴权
@@ -85,11 +529,11 @@ def _mock_stream(*args, **kwargs):
 
 
 def test_rate_limit_blocks_rapid_requests():
-    """同一用户 0.5s 内连发两次 /api/ask，第二次应被 RATE_LIMITED 拒绝。
+    """同一用户 0.5s 内连发两次 /api/ask，第二次应在建流前被 429 拒绝。
 
     行为说明：
     - 速率限制必须按 user.id 追踪，不能存在闭包对象上（每次请求都是新闭包）
-    - 限制触发时 SSE body 包含 RATE_LIMITED code，HTTP status 仍是 200（SSE 协议）
+    - 限制必须在创建 SSE 响应前触发，客户端才能收到标准 HTTP 429
     """
     from app.main import app
     client = TestClient(app)
@@ -109,9 +553,9 @@ def test_rate_limit_blocks_rapid_requests():
 
         # 立刻发第二次（< 0.5s）：应被速率限制
         r2 = client.post("/api/ask", headers=auth, json={"question": "test"})
-        assert r2.status_code == 200  # SSE 始终 200
-        assert "RATE_LIMITED" in r2.text, (
-            f"0.5s 内第二次请求应返回 RATE_LIMITED，实际 body：{r2.text[:200]}"
+        assert r2.status_code == 429
+        assert "请稍后再试" in r2.text, (
+            f"0.5s 内第二次请求应返回 HTTP 429，实际 body：{r2.text[:200]}"
         )
 
 

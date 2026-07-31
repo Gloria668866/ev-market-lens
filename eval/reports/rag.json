@@ -1,212 +1,1542 @@
 {
-  "total_questions": 13,
+  "total_questions": 20,
+  "positive_count": 13,
   "single_count": 10,
   "single_recall": 1.0,
   "cross_count": 3,
-  "cross_has_results": 1.0,
+  "cross_recall": 1.0,
   "overall_recall": 1.0,
-  "negative_count": 3,
-  "abstain_rate": 0.0,
+  "context_recall": 1.0,
+  "evidence_pass_rate": 1.0,
+  "claim_count": 22,
+  "claim_source_valid_rate": 1.0,
+  "retrieved_claim_support_rate": 1.0,
+  "critical_anchor_count": 54,
+  "critical_anchor_support_rate": 1.0,
+  "answer_anchor_support_rate": 1.0,
+  "strict_passed": 13,
+  "strict_pass_rate": 1.0,
+  "reranker_used": true,
+  "negative_count": 7,
+  "abstain_rate": 1.0,
   "_retrieval_details": [
     {
-      "question": "2025年中国新能源汽车销量突破多少万辆？",
+      "id": "rag-001",
+      "question": "2025年中国新能源乘用车批发销量预计突破多少万辆？",
       "category": "single",
-      "target_doc": 1,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "2025中国新能源汽车市场年度综述.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 24,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "新能源汽车出口与全球化.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        7.0,
-        6.0,
-        6.0,
-        4.0,
-        4.0
+        0.9999,
+        0.9976,
+        0.8461,
+        0.7571,
+        0.7225
+      ],
+      "claim_count": 1,
+      "claim_source_valid_count": 1,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 1,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 1,
+      "critical_anchor_supported_count": 1,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 1,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "2025 年全年新能源乘用车批发销量预计突破 1300 万辆。",
+          "source_filename": "2025中国新能源汽车市场年度综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "1300 万辆"
+          ],
+          "critical_anchors_in_merged_context": [
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true
+          ]
+        }
       ]
     },
     {
+      "id": "rag-002",
       "question": "新能源汽车购置税减免政策到什么时候结束？",
       "category": "single",
-      "target_doc": 2,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "新能源汽车购置税与补贴政策.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 25,
+      "num_merged_parents": 4,
+      "merged_context_sources": [
+        "2025新能源价格战与价位段格局.md",
+        "新能源汽车出口与全球化.md",
+        "新能源汽车购置税与补贴政策.md"
+      ],
       "top_scores": [
-        3.0,
-        3.0,
-        3.0,
-        3.0,
-        3.0
+        0.9833,
+        0.9678,
+        0.9657,
+        0.9637,
+        0.2467
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 6,
+      "critical_anchor_supported_count": 6,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 6,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "2024–2025 年新能源汽车购置税免征，单车免税额度上限约 3 万元。",
+          "source_filename": "新能源汽车购置税与补贴政策.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "2024–2025 年",
+            "免征",
+            "约 3 万元"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "2026–2027 年购置税减半征收，单车减税额度上限约 1.5 万元。",
+          "source_filename": "新能源汽车购置税与补贴政策.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "2026–2027 年",
+            "减半征收",
+            "约 1.5 万元"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "纯电动汽车（BEV）相比增程式（EREV）有什么优势？",
+      "id": "rag-003",
+      "question": "纯电动汽车（BEV）相比增程式（EREV）在结构和用车体验上有什么区别？",
       "category": "single",
-      "target_doc": 3,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "纯电插混增程技术路线对比.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 27,
+      "num_merged_parents": 4,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车系用户口碑综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        6.0,
-        4.0,
-        3.0,
-        3.0,
-        3.0
+        0.9993,
+        0.9942,
+        0.8761,
+        0.4673,
+        0.3355
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 6,
+      "critical_anchor_supported_count": 6,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 6,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "BEV 只靠动力电池驱动，结构最简单、使用成本最低，但依赖充电基础设施。",
+          "source_filename": "纯电插混增程技术路线对比.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "只靠动力电池驱动",
+            "结构最简单",
+            "依赖充电基础设施"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "EREV 的发动机不直接驱动车轮，只发电，驾驶平顺但高速馈电效率不如混联式插混。",
+          "source_filename": "纯电插混增程技术路线对比.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "不直接驱动车轮",
+            "只发电",
+            "高速馈电工况效率不如混联式插混"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "10-20万价格带有哪些热门车型？",
+      "id": "rag-004",
+      "question": "8万到15万元的新能源主流家用市场有哪些代表车型或品牌？",
       "category": "single",
-      "target_doc": 4,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "2025新能源价格战与价位段格局.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 26,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        5.0,
-        4.0,
-        4.0,
-        3.0,
-        3.0
+        0.9948,
+        0.9435,
+        0.8787,
+        0.6965,
+        0.6006
+      ],
+      "claim_count": 1,
+      "claim_source_valid_count": 1,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 1,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 5,
+      "critical_anchor_supported_count": 5,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 5,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "8 万–15 万元主流家用市场的代表包括比亚迪秦/海豚/元、吉利银河、零跑 C 系列和埃安。",
+          "source_filename": "2025新能源价格战与价位段格局.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "8 万–15 万元",
+            "比亚迪秦/海豚/元",
+            "吉利银河",
+            "零跑 C 系列",
+            "埃安"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "理想汽车2025年全年交付量是多少？",
+      "id": "rag-005",
+      "question": "理想“大空间增程 SUV + 家庭场景”的定位和 L 系列产品阶梯是什么？",
       "category": "single",
-      "target_doc": 5,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "主流车企新能源竞争力盘点.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 29,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "主流车系用户口碑综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        5.0,
-        5.0,
-        5.0,
-        4.0,
-        4.0
+        0.9986,
+        0.7548,
+        0.5539,
+        0.4738,
+        0.3414
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 3,
+      "critical_anchor_supported_count": 3,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 3,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "理想以“大空间增程 SUV + 家庭场景”定位，L6/L7/L8/L9 形成产品阶梯。",
+          "source_filename": "主流车企新能源竞争力盘点.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "大空间增程 SUV + 家庭场景",
+            "L6/L7/L8/L9"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "理想是增程路线的最大受益者之一。",
+          "source_filename": "主流车企新能源竞争力盘点.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "增程路线的最大受益者之一"
+          ],
+          "critical_anchors_in_merged_context": [
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "特斯拉Model Y在懂车帝口碑评分是多少？",
+      "id": "rag-006",
+      "question": "特斯拉Model 3和Model Y用户最常表扬和吐槽什么？",
       "category": "single",
-      "target_doc": 8,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "主流车系用户口碑综述.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 28,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "主流车系用户口碑综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        3.0,
-        3.0,
-        3.0,
-        2.0,
-        2.0
+        0.922,
+        0.8532,
+        0.197,
+        0.0553,
+        0.0405
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 3,
+      "critical_anchor_supported_count": 3,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 3,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "Model 3/Y 的好评集中在操控、能耗、智驾与超充。",
+          "source_filename": "主流车系用户口碑综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "操控、能耗、智驾与超充"
+          ],
+          "critical_anchors_in_merged_context": [
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "Model 3/Y 的吐槽集中在悬架偏硬、内饰简陋和做工一致性。",
+          "source_filename": "主流车系用户口碑综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "悬架偏硬、内饰简陋",
+            "做工一致性"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "2025年充电基础设施在三线以下城市的覆盖情况如何？",
+      "id": "rag-007",
+      "question": "为什么在补能尚不均衡时，插混和增程仍对主流家庭有吸引力？",
       "category": "single",
-      "target_doc": 3,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "纯电插混增程技术路线对比.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 30,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车系用户口碑综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        10.0,
-        6.0,
-        4.0,
-        4.0,
-        4.0
+        0.9991,
+        0.9923,
+        0.9762,
+        0.9077,
+        0.8723
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 4,
+      "critical_anchor_supported_count": 4,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 4,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "插混和增程兼顾电车的安静平顺、低使用成本与不被充电束缚。",
+          "source_filename": "纯电插混增程技术路线对比.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "安静平顺与低使用成本",
+            "不愿被充电束缚"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "补能尚不均衡时，插混/增程会承接燃油车退出后的主流家用市场份额。",
+          "source_filename": "纯电插混增程技术路线对比.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "补能尚不均衡",
+            "燃油车退出让出的主流家用市场份额"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "小米SU7 2025年交付了多少辆？",
+      "id": "rag-008",
+      "question": "小米SU7在用户口碑中有哪些优点和关注点？",
       "category": "single",
-      "target_doc": 5,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "主流车系用户口碑综述.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 27,
+      "num_merged_parents": 4,
+      "merged_context_sources": [
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "主流车系用户口碑综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        6.0,
-        5.0,
-        4.0,
-        4.0,
-        4.0
+        0.7962,
+        0.7005,
+        0.5406,
+        0.4407,
+        0.3203
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 3,
+      "critical_anchor_supported_count": 3,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 3,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "小米 SU7 的好评集中在设计、性能、智能化与生态。",
+          "source_filename": "主流车系用户口碑综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "设计、性能、智能化与生态"
+          ],
+          "critical_anchors_in_merged_context": [
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "小米 SU7 的关注点是产能交付与首批品控。",
+          "source_filename": "主流车系用户口碑综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "产能交付",
+            "首批品控"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "华为ADS 3.0的核心能力是什么？",
+      "id": "rag-009",
+      "question": "2025年智能驾驶技术路线出现了什么变化？",
       "category": "single",
-      "target_doc": 7,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "智能驾驶与智能座舱趋势.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 30,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "智能驾驶与智能座舱趋势.md"
+      ],
       "top_scores": [
-        4.0,
-        2.0,
-        2.0,
-        2.0,
-        2.0
+        0.9577,
+        0.9073,
+        0.7844,
+        0.6041,
+        0.5293
+      ],
+      "claim_count": 1,
+      "claim_source_valid_count": 1,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 1,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 2,
+      "critical_anchor_supported_count": 2,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 2,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "智能驾驶技术路线从高精地图加规则转向无图加端到端大模型。",
+          "source_filename": "智能驾驶与智能座舱趋势.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "高精地图 + 规则",
+            "无图 + 端到端大模型"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "比亚迪海鸥的续航和价格是多少？",
+      "id": "rag-010",
+      "question": "5万元以下的新能源代步市场有哪些代表车型？",
       "category": "single",
-      "target_doc": 4,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "2025新能源价格战与价位段格局.md"
+      ],
+      "expected_docs_resolved": 1,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 29,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        4.0,
-        4.0,
-        3.0,
-        3.0,
-        3.0
+        0.9758,
+        0.9291,
+        0.8524,
+        0.7819,
+        0.6176
+      ],
+      "claim_count": 1,
+      "claim_source_valid_count": 1,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 1,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 4,
+      "critical_anchor_supported_count": 4,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 4,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "5 万元以下 A00 代步市场的代表车型包括五菱宏光 MINIEV、长安 Lumin 和比亚迪海鸥（入门）。",
+          "source_filename": "2025新能源价格战与价位段格局.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "5 万元以下",
+            "五菱宏光 MINIEV",
+            "长安 Lumin",
+            "比亚迪海鸥"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "比亚迪在哪些价格带都有布局？分别是什么车型？",
+      "id": "rag-011",
+      "question": "比亚迪如何体现全价位布局？结合价位段格局举出代表车型。",
       "category": "cross",
-      "target_doc": null,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "主流车企新能源竞争力盘点.md",
+        "2025新能源价格战与价位段格局.md"
+      ],
+      "expected_docs_resolved": 2,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 28,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "智能驾驶与智能座舱趋势.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        5.0,
-        5.0,
-        4.0,
-        3.0,
-        3.0
+        0.7199,
+        0.3899,
+        0.2652,
+        0.2373,
+        0.1973
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 5,
+      "critical_anchor_supported_count": 5,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 5,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "比亚迪产品矩阵从海鸥到仰望，覆盖 5 万到百万元全价位。",
+          "source_filename": "主流车企新能源竞争力盘点.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "海鸥到仰望",
+            "5 万到百万元"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "价位段格局将海鸥列入 5 万元以下，将秦/海豚/元列入 8 万–15 万元，将宋/汉列入 15 万–25 万元。",
+          "source_filename": "2025新能源价格战与价位段格局.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "海鸥",
+            "秦/海豚/元",
+            "宋/汉"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "理想L7和问界M7的对比如何？",
+      "id": "rag-012",
+      "question": "理想和问界在用户口碑与智能驾驶上各有什么优势？",
       "category": "cross",
-      "target_doc": null,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "主流车系用户口碑综述.md",
+        "智能驾驶与智能座舱趋势.md"
+      ],
+      "expected_docs_resolved": 2,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 29,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车系用户口碑综述.md",
+        "智能驾驶与智能座舱趋势.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        4.0,
-        3.0,
-        3.0,
-        3.0,
-        2.0
+        0.9342,
+        0.8605,
+        0.8394,
+        0.7998,
+        0.7587
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 7,
+      "critical_anchor_supported_count": 7,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 7,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "理想 L 系列好评在空间、增程无焦虑和家庭友好，问界 M7/M9 好评在华为智驾、舒适与豪华感。",
+          "source_filename": "主流车系用户口碑综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "空间、增程无焦虑、家庭友好",
+            "华为智驾、舒适与豪华感"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "华为 ADS 属于第一梯队并赋能问界，理想也在自研高阶智驾。",
+          "source_filename": "智能驾驶与智能座舱趋势.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "华为 ADS",
+            "第一梯队",
+            "赋能问界",
+            "理想",
+            "自研高阶智驾"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        }
       ]
     },
     {
-      "question": "2025年增程式电动车整体市场表现如何？",
+      "id": "rag-013",
+      "question": "2025年增程式电动车整体市场表现如何，为什么受到欢迎？",
       "category": "cross",
-      "target_doc": null,
-      "hit": true,
-      "num_candidates": 20,
+      "expected_filenames": [
+        "2025中国新能源汽车市场年度综述.md",
+        "纯电插混增程技术路线对比.md"
+      ],
+      "expected_docs_resolved": 2,
+      "hit_recall": 1.0,
+      "context_recall": 1.0,
+      "evidence_ok": true,
+      "evidence_reason": "",
+      "strict_pass": true,
+      "reranker": true,
+      "num_candidates": 29,
+      "num_merged_parents": 5,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "新能源汽车出口与全球化.md",
+        "新能源汽车购置税与补贴政策.md",
+        "纯电插混增程技术路线对比.md"
+      ],
       "top_scores": [
-        4.0,
-        2.0,
-        2.0,
-        2.0,
-        2.0
+        0.9947,
+        0.9433,
+        0.8861,
+        0.7991,
+        0.7323
+      ],
+      "claim_count": 2,
+      "claim_source_valid_count": 2,
+      "claim_source_valid_rate": 1.0,
+      "retrieved_claim_support_count": 2,
+      "retrieved_claim_support_rate": 1.0,
+      "critical_anchor_count": 5,
+      "critical_anchor_supported_count": 5,
+      "critical_anchor_support_rate": 1.0,
+      "answer_anchor_supported_count": 5,
+      "answer_anchor_support_rate": 1.0,
+      "claim_details": [
+        {
+          "id": "c1",
+          "claim": "2025 年插混加增程合计销量增速超过 40%，高于纯电约 20% 的增速。",
+          "source_filename": "2025中国新能源汽车市场年度综述.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "超过 40%",
+            "纯电的约 20%"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true
+          ]
+        },
+        {
+          "id": "c2",
+          "claim": "增程受到欢迎的原因包括工程实现简单、可油可电无焦虑，以及大电池增程日常几乎纯电运行。",
+          "source_filename": "纯电插混增程技术路线对比.md",
+          "source_expected": true,
+          "source_exists": true,
+          "evidence_in_source": [
+            true,
+            true,
+            true
+          ],
+          "anchors_in_evidence": [
+            true,
+            true,
+            true
+          ],
+          "source_valid": true,
+          "source_in_merged_context": true,
+          "evidence_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "retrieved_support": true,
+          "critical_anchors": [
+            "工程实现简单",
+            "可油可电、无焦虑",
+            "日常几乎纯电运行"
+          ],
+          "critical_anchors_in_merged_context": [
+            true,
+            true,
+            true
+          ],
+          "critical_anchors_in_answer": [
+            true,
+            true,
+            true
+          ]
+        }
       ]
     }
   ],
   "_negative_details": [
     {
+      "id": "rag-014",
       "question": "奔驰EQS 2025年销量是多少？",
-      "top_score": 2.0,
-      "should_abstain": false
+      "top_score": 0.7205,
+      "should_abstain": true,
+      "reason": "missing_query_anchor",
+      "reranker": true,
+      "num_candidates": 26,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "新能源汽车购置税与补贴政策.md",
+        "纯电插混增程技术路线对比.md"
+      ]
     },
     {
+      "id": "rag-015",
       "question": "特斯拉Cybertruck在中国卖了多少辆？",
-      "top_score": 3.0,
-      "should_abstain": false
+      "top_score": 0.8172,
+      "should_abstain": true,
+      "reason": "missing_query_anchor",
+      "reranker": true,
+      "num_candidates": 22,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "新能源汽车出口与全球化.md",
+        "纯电插混增程技术路线对比.md"
+      ]
     },
     {
+      "id": "rag-016",
       "question": "苹果汽车什么时候发布？",
-      "top_score": 1.0,
-      "should_abstain": false
+      "top_score": 0.0598,
+      "should_abstain": true,
+      "reason": "low_score",
+      "reranker": true,
+      "num_candidates": 25,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "智能驾驶与智能座舱趋势.md"
+      ]
+    },
+    {
+      "id": "rag-017",
+      "question": "NIO Power在2025年三线以下城市的换电站覆盖率达到多少？",
+      "top_score": 0.0754,
+      "should_abstain": true,
+      "reason": "low_score",
+      "reranker": true,
+      "num_candidates": 27,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "2025新能源价格战与价位段格局.md",
+        "主流车企新能源竞争力盘点.md",
+        "纯电插混增程技术路线对比.md"
+      ]
+    },
+    {
+      "id": "rag-018",
+      "question": "2028年CAFC-X政策规定的新能源汽车购置税免税上限是多少？",
+      "top_score": 0.9824,
+      "should_abstain": true,
+      "reason": "missing_query_anchor",
+      "reranker": true,
+      "num_candidates": 27,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "新能源汽车出口与全球化.md",
+        "新能源汽车购置税与补贴政策.md"
+      ]
+    },
+    {
+      "id": "rag-019",
+      "question": "BYD Seal在2025年巴西市场销量是多少辆？",
+      "top_score": 0.182,
+      "should_abstain": true,
+      "reason": "low_score",
+      "reranker": true,
+      "num_candidates": 26,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "新能源汽车出口与全球化.md"
+      ]
+    },
+    {
+      "id": "rag-020",
+      "question": "HyperCharge充电网络在县乡市场的覆盖率达到95%了吗？",
+      "top_score": 0.1046,
+      "should_abstain": true,
+      "reason": "low_score",
+      "reranker": true,
+      "num_candidates": 28,
+      "merged_context_sources": [
+        "2025中国新能源汽车市场年度综述.md",
+        "主流车企新能源竞争力盘点.md",
+        "主流车系用户口碑综述.md",
+        "新能源汽车出口与全球化.md",
+        "纯电插混增程技术路线对比.md"
+      ]
     }
   ],
-  "_timestamp": "2026-07-01 19:09:25"
+  "_meta": {
+    "timestamp": "2026-07-29T15:09:33.115745+00:00",
+    "git": {
+      "commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+      "dirty": false,
+      "dirty_path_count": 0
+    },
+    "backend": "local",
+    "backend_disclosure": "local SQLite + NumPy evaluation backend; this is not the production PostgreSQL/pgvector backend",
+    "user_id": 0,
+    "pipeline": [
+      "hybrid_recall",
+      "rerank",
+      "evidence_is_sufficient",
+      "merge_parents"
+    ],
+    "embedding": {
+      "model_name": "D:\\bi-agent\\models\\bge-large-zh-v1.5",
+      "model_version": "bge-large-zh-v1.5",
+      "dimension": 1024,
+      "max_tokens": 512,
+      "runtime": "loaded:SentenceTransformer"
+    },
+    "reranker": {
+      "model_name": "D:\\bi-agent\\models\\bge-reranker-base",
+      "runtime": "loaded:CrossEncoder",
+      "used_for_all_questions": true
+    },
+    "retrieval_config": {
+      "RECALL_VEC_K": 20,
+      "RECALL_KW_K": 20,
+      "RRF_K": 60,
+      "RRF_FALLBACK_SCORE_MIN": 0.02,
+      "RERANK_TOP_K": 8,
+      "RERANK_SCORE_MIN": 0.2,
+      "CONTEXT_TOKEN_BUDGET": 3000,
+      "MAX_PARENTS": 5
+    },
+    "evaluation_config_sha256": "9e9a49d504ee7745de07db7ffbbc73ab66be5de2916cb5258dc4311560a14aa2",
+    "dataset_sha256": "249be47f01e4b2d5550a7742ce7e9b1d6090b3038c401cb8f371745bf2c7bdf4",
+    "seed_corpus_manifest": {
+      "file_count": 8,
+      "sha256": "35b29e2b740ad5924a96f6bc57bf4037fdbaec21fd0729f17580039e31cfa6bb",
+      "files": [
+        {
+          "filename": "2025中国新能源汽车市场年度综述.md",
+          "bytes": 2230,
+          "sha256": "cabc5f3ac4319a2853632873431eaa8c3208aab84e10bea517e725ae673c3768"
+        },
+        {
+          "filename": "2025新能源价格战与价位段格局.md",
+          "bytes": 1790,
+          "sha256": "6ca83ac3ef1cb6ee7e46319565ffa5bee6ab453ba5e6ca5a95157026c478f449"
+        },
+        {
+          "filename": "主流车企新能源竞争力盘点.md",
+          "bytes": 1938,
+          "sha256": "86efbc0a4b0e978aa85f4bae48e0c44380322b8d29e5f02e07bd46b1983286f1"
+        },
+        {
+          "filename": "主流车系用户口碑综述.md",
+          "bytes": 1897,
+          "sha256": "e3f972a75b708a57017a8d66eba2b320b81f0bac6934d509287f55a997b720e7"
+        },
+        {
+          "filename": "新能源汽车出口与全球化.md",
+          "bytes": 1720,
+          "sha256": "987e8f84502e95da8e021fe1cbfa89cdb0939a0cdff95b814b0cfc639bd9d3e1"
+        },
+        {
+          "filename": "新能源汽车购置税与补贴政策.md",
+          "bytes": 1994,
+          "sha256": "8988a8f37e00dd6255aec96fdc668f51bf0fdcc8e1d54c3db740062d72f83137"
+        },
+        {
+          "filename": "智能驾驶与智能座舱趋势.md",
+          "bytes": 1697,
+          "sha256": "0d6f868c67b9566561e59e86d6c06ef401ff282b9035d220b254f373f17c0e48"
+        },
+        {
+          "filename": "纯电插混增程技术路线对比.md",
+          "bytes": 2108,
+          "sha256": "f9932035e82a77b47b3b7a3bfa764c32fc520513ea0a2baebcb93cbe1eb2da57"
+        }
+      ]
+    },
+    "scope": "retrieval_evidence_coverage_and_abstention_only",
+    "does_not_measure": [
+      "generated_answer_faithfulness",
+      "generated_answer_correctness",
+      "citation_precision"
+    ]
+  }
 }

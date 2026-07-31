@@ -17,7 +17,10 @@ export const MAX_UPLOAD_MB = 20
 function normDoc(d) {
   return {
     docId: d.id ?? d.doc_id,
-    title: d.filename || d.title || ('文档 #' + (d.id ?? d.doc_id ?? '')),
+    title: d.title || d.filename || ('文档 #' + (d.id ?? d.doc_id ?? '')),
+    filename: d.filename || '',
+    sourceUri: d.source_uri || '',
+    isPublic: Boolean(d.is_public ?? d.isPublic),
     status: d.status || 'ready',
     chunkCount: d.chunk_count ?? 0,
     fileType: d.file_type || (d.filename || '').split('.').pop()?.toLowerCase() || '',
@@ -62,8 +65,11 @@ async function liveDelete(docId) {
 import corpus from './kb_corpus.json'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 let _mockDocs = (Array.isArray(corpus) ? corpus : (corpus.docs || [])).map((d) => ({
-  id: d.id, filename: d.filename || (d.title + '.md'), status: 'ready',
-  file_type: d.fileType || 'md', chunk_count: d.chunkCount, created_at: d.createdAt,
+  id: d.id, filename: d.filename || (d.title + '.md'), title: d.title,
+  source_uri: d.source_uri || '', is_public: d.is_public ?? true, status: 'ready',
+  file_type: d.file_type || d.fileType || 'md',
+  chunk_count: d.chunk_count ?? d.chunkCount ?? d.chunks?.length ?? 0,
+  created_at: d.created_at || d.createdAt || '',
 }))
 let _mockSeq = 1000
 

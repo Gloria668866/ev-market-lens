@@ -4,7 +4,9 @@ Tests layer5_business_rules() contract:
 - Only sql can be overridden to rag.
 - hybrid, rag, chat, clarify are never modified by rules.
 """
-from app.nlu import layer5_business_rules
+import pytest
+
+from app.nlu import deterministic_intent_hint, layer5_business_rules
 
 
 # ── SQL correctly overridden to rag (data not in DB) ──────────────────────────
@@ -99,3 +101,85 @@ def test_chat_not_modified():
 
 def test_clarify_not_modified():
     assert layer5_business_rules("clarify", "充电桩数量") == "clarify"
+
+
+@pytest.mark.parametrize("question", [
+    "30万以上价位卖得最好的车系排名",
+    "排名环比上升最快的车系",
+    "哪些车系每个月都进了前十",
+    "增程SUV销量前五",
+])
+def test_deterministic_sql_hints(question):
+    assert deterministic_intent_hint(question) == "sql"
+
+
+@pytest.mark.parametrize("question", [
+    "理想i8的车主口碑怎么样",
+    "长安汽车的1445战略是什么",
+    "比亚迪在动力电池回收方面做了什么",
+    "这份年度报告怎么看2025年的价格带格局",
+    "报告对2025年销量总览是怎么说的",
+    "报告认为新能源价格战会怎么发展",
+])
+def test_deterministic_rag_hints(question):
+    assert deterministic_intent_hint(question) == "rag"
+
+
+@pytest.mark.parametrize("question", [
+    "充电基础设施同比增长了多少",
+    "用户对新能源车的售后体验评价怎样",
+])
+def test_out_of_schema_metrics_and_review_language_route_to_rag(question):
+    assert deterministic_intent_hint(question) == "rag"
+
+
+@pytest.mark.parametrize("question", [
+    "小米SU7卖得怎么样，口碑好不好",
+    "理想L6销量多少，车主评价如何",
+    "10到20万卖得最好的车有哪些，报告怎么分析这个区间",
+    "插混销量趋势怎样，相关政策有什么影响",
+    "比亚迪各车系卖多少，口碑上大家怎么说",
+    "增程车销量数据如何，报告怎么解读这个趋势",
+    "2025销量冠军是谁，报告怎么评价它",
+    "30万以上市场销量格局如何，报告怎么解读",
+])
+def test_deterministic_hybrid_hints(question):
+    assert deterministic_intent_hint(question) == "hybrid"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "有什么想法吗",
+        "这个靠谱吗",
+        "你觉得呢",
+        "这几个里面选哪个",
+        "帮我参考一下",
+    ],
+)
+def test_deterministic_vague_hints_without_context(question):
+    assert deterministic_intent_hint(question) == "clarify"
+
+
+def test_short_generic_sales_phrase_is_not_forced_to_sql():
+    assert deterministic_intent_hint("销量排名") is None
+
+
+def test_dynamic_top_n_aggregate_is_forced_to_sql():
+    assert deterministic_intent_hint("各品牌进入销量前50的车系数量") == "sql"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "现在买什么车合适",
+        "我应该选什么车",
+        "推荐什么车",
+    ],
+)
+def test_underspecified_purchase_recommendation_requires_clarification(question):
+    assert deterministic_intent_hint(question) == "clarify"
+
+
+def test_scoped_purchase_recommendation_is_not_forced_to_clarify():
+    assert deterministic_intent_hint("预算20万，家用应该买什么车") != "clarify"

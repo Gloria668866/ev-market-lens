@@ -1,11 +1,21 @@
 {
   "n": 60,
   "max_retry": 2,
-  "first_pass_accuracy": 0.7667,
-  "exec_accuracy": 0.7833,
+  "first_pass_accuracy": 0.9833,
+  "exec_accuracy": 1.0,
   "retry_gain": 0.0167,
-  "first_correct": 46,
-  "final_correct": 47,
+  "first_correct": 59,
+  "final_correct": 60,
+  "meta": {
+    "timestamp": "2026-07-29T15:14:09.728270+00:00",
+    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+    "dirty_worktree": false,
+    "dataset_sha256": "f4a954cdfe4b66500b56cbc243c8f3df3276bea664849cbf1db208512efaa1b9",
+    "model": "deepseek-v4-flash",
+    "provider": "unknown",
+    "config_sha256": "337e413d4d62c2ce8364826dca436e7719989b3115c39496798a443bedeed786",
+    "fact_rows": 8402
+  },
   "rows": [
     {
       "id": "sql-001",
@@ -14,7 +24,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC LIMIT 10",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 10",
       "error": null
     },
     {
@@ -24,7 +34,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米SU7%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%小米SU7%'\nLIMIT 200",
       "error": null
     },
     {
@@ -34,7 +44,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%理想L6%' OR s.series_name LIKE '%理想L7%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%理想L6%' OR s.series_name LIKE '%理想L7%' GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -44,7 +54,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 5",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 3 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 5",
       "error": null
     },
     {
@@ -54,7 +64,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%Model Y%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%Model Y%'\nLIMIT 200",
       "error": null
     },
     {
@@ -64,7 +74,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 2 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC LIMIT 10",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 2 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 10",
       "error": null
     },
     {
@@ -74,7 +84,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -84,17 +94,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "pred_sql": "SELECT b.brand_name AS brand_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY b.brand_id, b.brand_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
       "id": "sql-009",
       "q": "2025年5月销量第一的车系",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND d.month = 5\nGROUP BY s.series_id, s.series_name\nORDER BY SUM(f.volume) DESC\nLIMIT 1",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 5 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
@@ -104,47 +114,47 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 1\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-011",
-      "q": "星愿2025年每个月的销量",
+      "q": "海鸥2025年每个月的销量",
       "first_match": true,
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT d.ym AS month, SUM(f.volume) AS volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%星愿%' AND d.year = 2025\nGROUP BY d.date_id, d.ym\nORDER BY d.date_id\nLIMIT 200",
+      "pred_sql": "SELECT d.ym, SUM(f.volume) AS monthly_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE s.series_name LIKE '%海鸥%' AND d.year = 2025 GROUP BY d.ym ORDER BY d.ym\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-012",
       "q": "五菱宏光MINIEV累计销量",
-      "first_match": false,
-      "final_match": false,
-      "attempts": 1,
-      "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%五菱宏光MINIEV%'\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
-      "error": null
-    },
-    {
-      "id": "sql-013",
-      "q": "2025年销量超过30万辆的纯电车系有哪些",
       "first_match": true,
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 1\nGROUP BY s.series_id, s.series_name\nHAVING SUM(f.volume) > 300000\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%五菱宏光MINIEV%'\nLIMIT 200",
+      "error": null
+    },
+    {
+      "id": "sql-013",
+      "q": "2025年销量超过15万辆的纯电车系有哪些",
+      "first_match": true,
+      "final_match": true,
+      "attempts": 1,
+      "exec_ok": true,
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id, s.series_name HAVING SUM(f.volume) > 150000 ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-014",
       "q": "理想汽车全系2025年累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%理想汽车%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE b.brand_name LIKE '%理想汽车%' AND d.year = 2025\nLIMIT 200",
       "error": null
     },
     {
@@ -154,7 +164,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 5",
+      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2026 AND d.month = 1 AND f.new_energy_type = 1 ORDER BY f.volume DESC LIMIT 5",
       "error": null
     },
     {
@@ -164,7 +174,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%蔚来%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%蔚来%' GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -174,7 +184,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 12\nLIMIT 200",
       "error": null
     },
     {
@@ -184,7 +194,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%秦PLUS DM%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%秦PLUS DM%'\nLIMIT 200",
       "error": null
     },
     {
@@ -194,7 +204,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 3 AND d.year = 2025\nLIMIT 200",
       "error": null
     },
     {
@@ -204,27 +214,27 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小鹏MONA M03%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%小鹏%' AND s.series_name LIKE '%MONA M03%'\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-021",
       "q": "2025年各动力类型的总销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.powertrain, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY s.powertrain\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT f.new_energy_type, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.new_energy_type ORDER BY f.new_energy_type\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-022",
       "q": "指导价低于15万的纯电车系有多少个",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(*) FROM dim_series WHERE guide_price_min < 15 AND powertrain = '纯电'\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(*) AS series_count FROM dim_series s WHERE s.powertrain = '纯电' AND s.guide_price_max < 15\nLIMIT 200",
       "error": null
     },
     {
@@ -234,17 +244,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 3",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 3",
       "error": null
     },
     {
       "id": "sql-024",
       "q": "海鸥2025年累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%海鸥%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE s.series_name LIKE '%海鸥%' AND d.year = 2025\nLIMIT 200",
       "error": null
     },
     {
@@ -254,7 +264,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\n  AND (b.brand_name LIKE '%比亚迪%' OR b.brand_name LIKE '%吉利银河%')\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE b.brand_name IN ('比亚迪', '吉利银河') AND d.year = 2025 GROUP BY b.brand_id, b.brand_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -264,7 +274,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025 AND d.quarter = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 10",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 AND d.quarter = 1 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 10",
       "error": null
     },
     {
@@ -274,7 +284,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON f.series_id = s.series_id WHERE s.series_name LIKE '%元PLUS%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%元PLUS%'\nLIMIT 200",
       "error": null
     },
     {
@@ -284,7 +294,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 2 AND d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 2\nLIMIT 200",
       "error": null
     },
     {
@@ -294,7 +304,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(*) FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id HAVING SUM(f.volume) >= 200000) t\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(*) AS series_count FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id HAVING SUM(f.volume) > 200000) t\nLIMIT 200",
       "error": null
     },
     {
@@ -304,7 +314,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米SU7%' OR s.series_name LIKE '%Model Y%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%小米SU7%' OR s.series_name LIKE '%Model Y%' GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -314,7 +324,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name\nFROM dim_series s\nJOIN dim_brand b ON s.brand_id = b.brand_id\nWHERE b.brand_name LIKE '%理想汽车%'\nORDER BY s.series_name\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name FROM dim_series s JOIN dim_brand b ON s.brand_id = b.brand_id WHERE b.brand_name LIKE '%理想汽车%' ORDER BY s.series_name\nLIMIT 200",
       "error": null
     },
     {
@@ -324,7 +334,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume ASC\nLIMIT 5",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 1 GROUP BY s.series_id, s.series_name ORDER BY total_volume ASC LIMIT 5",
       "error": null
     },
     {
@@ -334,7 +344,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS cumulative_volume FROM fact_sales_rank f JOIN dim_series s ON f.series_id = s.series_id WHERE s.series_name LIKE '%汉DM%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%汉DM%'\nLIMIT 200",
       "error": null
     },
     {
@@ -344,7 +354,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT d.year, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year IN (2024, 2025)\nGROUP BY d.year\nORDER BY d.year\nLIMIT 200",
+      "pred_sql": "SELECT d.year, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year IN (2024, 2025) GROUP BY d.year ORDER BY d.year\nLIMIT 200",
       "error": null
     },
     {
@@ -354,17 +364,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(DISTINCT f.series_id) AS distinct_series_count\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(DISTINCT f.series_id) AS series_count FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-036",
       "q": "AION Y累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%AION Y%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%AION Y%'\nLIMIT 200",
       "error": null
     },
     {
@@ -374,37 +384,37 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, f.volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202506 AND f.new_energy_type = 1\nORDER BY f.volume DESC\nLIMIT 10",
+      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 6 AND f.new_energy_type = 1 ORDER BY f.volume DESC LIMIT 10",
       "error": null
     },
     {
       "id": "sql-038",
       "q": "宋Pro DM累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%宋Pro DM%'\nGROUP BY s.series_id, s.series_name\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%宋Pro DM%'\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-039",
       "q": "2025年增程车系有哪些上过榜",
-      "first_match": false,
+      "first_match": true,
       "final_match": true,
-      "attempts": 2,
+      "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT DISTINCT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 3 AND d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT DISTINCT s.series_name FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 3 ORDER BY s.series_name\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-040",
       "q": "五菱汽车2025年累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT b.brand_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%五菱%' AND d.year = 2025\nGROUP BY b.brand_id, b.brand_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE b.brand_name LIKE '%五菱汽车%' AND d.year = 2025\nLIMIT 200",
       "error": null
     },
     {
@@ -414,7 +424,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, f.volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512\nORDER BY f.volume DESC\nLIMIT 5",
+      "pred_sql": "SELECT s.series_name, f.volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 12 ORDER BY f.volume DESC LIMIT 5",
       "error": null
     },
     {
@@ -424,7 +434,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(DISTINCT series_id) AS series_count FROM dim_series WHERE guide_price_min >= 30\nLIMIT 200",
+      "pred_sql": "SELECT COUNT(*) AS series_count FROM dim_series s WHERE s.guide_price_min >= 30\nLIMIT 200",
       "error": null
     },
     {
@@ -444,7 +454,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT AVG(total_volume) AS avg_cumulative_volume FROM (SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY f.series_id) t\nLIMIT 200",
+      "pred_sql": "SELECT AVG(total_volume) AS avg_cumulative_volume FROM (SELECT s.series_id, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id)\nLIMIT 200",
       "error": null
     },
     {
@@ -454,7 +464,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%极氪%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%极氪%' GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -464,17 +474,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 2\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 2 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
       "id": "sql-047",
       "q": "Model 3累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%Model 3%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%Model 3%'\nLIMIT 200",
       "error": null
     },
     {
@@ -484,7 +494,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT d.ym AS month, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2025\nGROUP BY d.ym\nORDER BY d.ym\nLIMIT 200",
+      "pred_sql": "SELECT d.ym, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type = 1 GROUP BY d.ym ORDER BY d.ym\nLIMIT 200",
       "error": null
     },
     {
@@ -494,7 +504,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%小米YU7%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%小米%' AND s.series_name LIKE '%YU7%'\nLIMIT 200",
       "error": null
     },
     {
@@ -504,17 +514,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025 AND f.new_energy_type = 1\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 10 OFFSET 10",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 10 OFFSET 10",
       "error": null
     },
     {
       "id": "sql-051",
       "q": "银河E5累计销量",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%银河E5%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%银河E5%'\nLIMIT 200",
       "error": null
     },
     {
@@ -524,17 +534,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT f.new_energy_type, COUNT(DISTINCT f.series_id) AS series_count\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.year = 2025\nGROUP BY f.new_energy_type\nORDER BY f.new_energy_type\nLIMIT 200",
+      "pred_sql": "SELECT f.new_energy_type, COUNT(DISTINCT f.series_id) AS series_count FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type IN (1, 2, 3) GROUP BY f.new_energy_type ORDER BY f.new_energy_type\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-053",
-      "q": "腾势各车系累计销量",
+      "q": "零跑各车系累计销量",
       "first_match": true,
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nWHERE b.brand_name LIKE '%腾势%'\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id WHERE b.brand_name LIKE '%零跑%' GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC\nLIMIT 200",
       "error": null
     },
     {
@@ -544,17 +554,17 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month BETWEEN 1 AND 3\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE f.new_energy_type = 1 AND d.year = 2026 AND d.month BETWEEN 1 AND 3\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-055",
       "q": "理想L6 2025年每月销量",
-      "first_match": true,
+      "first_match": false,
       "final_match": true,
-      "attempts": 1,
+      "attempts": 2,
       "exec_ok": true,
-      "pred_sql": "SELECT d.ym, SUM(f.volume) AS monthly_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE s.series_name LIKE '%理想L6%' AND d.year = 2025\nGROUP BY d.ym\nORDER BY d.ym\nLIMIT 200",
+      "pred_sql": "SELECT d.ym, SUM(f.volume) AS monthly_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE s.series_name LIKE '%理想L6%' AND d.year = 2025 GROUP BY d.ym ORDER BY d.ym\nLIMIT 200",
       "error": null
     },
     {
@@ -564,7 +574,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT COUNT(DISTINCT f.series_id) AS count\nFROM fact_sales_rank f\nWHERE f.series_id IN (\n  SELECT fs.series_id\n  FROM fact_sales_rank fs\n  JOIN dim_date d ON fs.date_id = d.date_id\n  WHERE d.year = 2025\n  GROUP BY fs.series_id\n  ORDER BY SUM(fs.volume) DESC\n  LIMIT 10\n)\nAND f.new_energy_type = 3",
+      "pred_sql": "SELECT COUNT(*) AS cnt FROM (SELECT f.series_id FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 GROUP BY f.series_id ORDER BY SUM(f.volume) DESC LIMIT 10) AS top10 JOIN dim_series s ON s.series_id = top10.series_id WHERE s.powertrain = '增程'",
       "error": null
     },
     {
@@ -574,7 +584,7 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nWHERE s.series_name LIKE '%唐DM%'\nLIMIT 200",
+      "pred_sql": "SELECT SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id WHERE s.series_name LIKE '%唐DM%'\nLIMIT 200",
       "error": null
     },
     {
@@ -584,27 +594,27 @@
       "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_brand b ON b.brand_id = s.brand_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025\nGROUP BY s.series_id, s.series_name\nORDER BY total_volume DESC\nLIMIT 1",
+      "pred_sql": "SELECT s.series_name, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_brand b ON b.brand_id = s.brand_id JOIN dim_date d ON d.date_id = f.date_id WHERE b.brand_name LIKE '%比亚迪%' AND d.year = 2025 GROUP BY s.series_id, s.series_name ORDER BY total_volume DESC LIMIT 1",
       "error": null
     },
     {
       "id": "sql-059",
       "q": "2025年纯电销量总和与插混销量总和",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT SUM(CASE WHEN f.new_energy_type = 1 THEN f.volume ELSE 0 END) AS 纯电销量总和, SUM(CASE WHEN f.new_energy_type = 2 THEN f.volume ELSE 0 END) AS 插混销量总和 FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025\nLIMIT 200",
+      "pred_sql": "SELECT f.new_energy_type, SUM(f.volume) AS total_volume FROM fact_sales_rank f JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND f.new_energy_type IN (1,2) GROUP BY f.new_energy_type ORDER BY f.new_energy_type\nLIMIT 200",
       "error": null
     },
     {
       "id": "sql-060",
       "q": "2025年12月排名上升的车系有哪些（当月排名优于上期）",
-      "first_match": false,
-      "final_match": false,
+      "first_match": true,
+      "final_match": true,
       "attempts": 1,
       "exec_ok": true,
-      "pred_sql": "SELECT s.series_name\nFROM fact_sales_rank f\nJOIN dim_series s ON s.series_id = f.series_id\nJOIN dim_date d ON d.date_id = f.date_id\nWHERE d.date_id = 202512 AND f.rank < f.last_rank\nORDER BY s.series_name\nLIMIT 200",
+      "pred_sql": "SELECT s.series_name, f.rank, f.last_rank FROM fact_sales_rank f JOIN dim_series s ON s.series_id = f.series_id JOIN dim_date d ON d.date_id = f.date_id WHERE d.year = 2025 AND d.month = 12 AND f.last_rank IS NOT NULL AND f.rank < f.last_rank ORDER BY (f.last_rank - f.rank) DESC\nLIMIT 200",
       "error": null
     }
   ]

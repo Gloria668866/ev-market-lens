@@ -21,11 +21,13 @@ celery.conf.update(
     broker_connection_retry_on_startup=True,
 )
 
-# Beat 定时表：每月 1 号 03:00 增量采集销量并加载进 PG（历史月幂等跳过、刷最近月）
+# Beat 定时表：每月 8/15 号 03:00 增量采集并加载进 PG。
+# 源站月榜通常不是 1 号立即发布；双日期配合源站月份元数据校验，既避免把上月
+# 静默回退结果误标成新月，也能在首次发布稍晚时自动补跑。
 celery.conf.beat_schedule = {
     "monthly-sales-refresh": {
         "task": "cron.monthly_sales_refresh",
-        "schedule": crontab(day_of_month=1, hour=3, minute=0),
+        "schedule": crontab(day_of_month="8,15", hour=3, minute=0),
     },
 }
 

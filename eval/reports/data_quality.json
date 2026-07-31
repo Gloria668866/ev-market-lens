@@ -1,36 +1,46 @@
 {
-  "total": 18,
-  "passed": 18,
+  "total": 23,
+  "passed": 23,
   "results": [
     {
-      "expectation": "fact_sales_rank 行数 == 8072",
+      "expectation": "fact_sales_rank 行数 >= 5000",
       "success": true,
-      "detail": "实际 8072"
+      "detail": "实际 8402"
     },
     {
-      "expectation": "fact_price 行数 == 8072",
+      "expectation": "fact_price 行数 >= 5000",
       "success": true,
-      "detail": "实际 8072"
+      "detail": "实际 8402"
     },
     {
-      "expectation": "fact_review 行数 == 8072",
+      "expectation": "fact_review 行数 >= 5000",
       "success": true,
-      "detail": "实际 8072"
+      "detail": "实际 8402"
     },
     {
-      "expectation": "dim_series 行数 == 409",
+      "expectation": "dim_series 行数 >= 300",
       "success": true,
-      "detail": "实际 409"
+      "detail": "实际 433"
     },
     {
-      "expectation": "dim_brand 行数 == 101",
+      "expectation": "dim_brand 行数 >= 50",
       "success": true,
-      "detail": "实际 101"
+      "detail": "实际 102"
     },
     {
-      "expectation": "dim_date 行数 == 29",
+      "expectation": "dim_date 行数 >= 24",
       "success": true,
-      "detail": "实际 29"
+      "detail": "实际 30"
+    },
+    {
+      "expectation": "fact_sales_rank 与 fact_price 行数一致",
+      "success": true,
+      "detail": "8402 vs 8402"
+    },
+    {
+      "expectation": "fact_sales_rank 与 fact_review 行数一致",
+      "success": true,
+      "detail": "8402 vs 8402"
     },
     {
       "expectation": "fact_sales_rank.series_id 无空值",
@@ -68,7 +78,7 @@
       "detail": "0 条越界"
     },
     {
-      "expectation": "dim_date.year 取值 ⊆ [2024, 2025, 2026]",
+      "expectation": "dim_date.year ∈ [2024,2026]",
       "success": true,
       "detail": "0 条越界"
     },
@@ -91,6 +101,28 @@
       "expectation": "fact_sales_rank.date_id → dim_date.date_id 外键完整",
       "success": true,
       "detail": "0 条孤儿"
+    },
+    {
+      "expectation": "dim_date 从最早到最新月份连续",
+      "success": true,
+      "detail": "202401~202606：实际 30 月，应为 30 月"
+    },
+    {
+      "expectation": "每个月覆盖 3 种新能源类型",
+      "success": true,
+      "detail": "0 个月缺分区"
+    },
+    {
+      "expectation": "最近两个月销量快照不完全相同",
+      "success": true,
+      "detail": "202605 vs 202606"
     }
-  ]
+  ],
+  "_meta": {
+    "timestamp": "2026-07-29T15:07:04.945730+00:00",
+    "database": "bi_demo.db",
+    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+    "dirty_worktree": false,
+    "raw_sha256": "4fff409e45815419e72ff85031a1ad26821cf9137a700403424bb2657cce14b3"
+  }
 }

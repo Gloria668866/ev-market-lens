@@ -1,6 +1,6 @@
 """长期记忆服务：会话摘要提炼（L2）+ 用户画像更新（L3）+ 相关历史召回。
 
-写入时机：_persist() 后由 schedule_extraction() 有条件调度（有界线程池、进程内去重）。
+写入时机：_persist_answer() 后由 schedule_extraction() 有条件调度（有界线程池、进程内去重）。
 读取时机：每次请求开始时，注入到 prompt 上下文。
 """
 import json

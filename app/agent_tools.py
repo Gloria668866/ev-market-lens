@@ -4,18 +4,26 @@ Code agents call these via function calling — they never generate executable c
 Each tool is a pure Python function with a defined JSON schema for LLM consumption.
 """
 import json
+import ipaddress
 import logging
 import re
+import socket
 import threading
 import time
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import ssl
 
 import httpx
 
-from .config import AGENTS_CONFIG_PATH
+from .config import (
+    AGENTS_CONFIG_PATH,
+    BRAVE_SEARCH_API_KEY,
+    SEARCH_API_TIMEOUT_SECONDS,
+    TAVILY_API_KEY,
+    TAVILY_SEARCH_DEPTH,
+)
 
 _log = logging.getLogger("cheshijing.agent_tools")
 
@@ -29,6 +37,28 @@ _SSL_CONTEXT = ssl.create_default_context()
 # Per-domain rate limiter (prevents IP ban from aggressive crawling)
 _domain_last_call: dict[str, float] = {}
 _DOMAIN_MIN_INTERVAL = 3.0
+_MAX_REDIRECTS = 5
+_TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+_BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+_SEARCH_API_TIMEOUT = httpx.Timeout(
+    SEARCH_API_TIMEOUT_SECONDS,
+    connect=min(3.0, SEARCH_API_TIMEOUT_SECONDS),
+)
+_search_runtime_lock = threading.Lock()
+_search_runtime: dict[str, Any] = {
+    "last_status": "never",
+    "last_provider": None,
+    "last_attempts": [],
+    "updated_at": None,
+}
+
+
+class _SearchProviderFailure(RuntimeError):
+    """Sanitized provider failure; never carries response bodies or API keys."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
 
 
 def _rate_limit_domain(domain: str):
@@ -40,73 +70,355 @@ def _rate_limit_domain(domain: str):
     _domain_last_call[domain] = time.time()
 
 
+def _resolve_host_addresses(hostname: str, port: int) -> set[ipaddress._BaseAddress]:
+    """Resolve every address for SSRF validation; callers reject any non-global result."""
+    return {
+        ipaddress.ip_address(item[4][0])
+        for item in socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    }
+
+
+def _public_url_error(url: str) -> str | None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Blocked URL scheme: {parsed.scheme}"
+    if not parsed.hostname or parsed.username or parsed.password:
+        return "Blocked: invalid or credential-bearing URL"
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        addresses = _resolve_host_addresses(parsed.hostname, port)
+    except (OSError, ValueError):
+        return "Blocked: hostname cannot be safely resolved"
+    if not addresses or any(not address.is_global for address in addresses):
+        return "Blocked: host resolves to a non-public address"
+    return None
+
+
+def _response_peer_is_public(response: httpx.Response) -> bool:
+    """Verify the actual connected peer when httpx exposes its network stream."""
+    stream = response.extensions.get("network_stream")
+    if stream is None:
+        return True
+    try:
+        peer = stream.get_extra_info("server_addr")
+        if not peer:
+            return True
+        return ipaddress.ip_address(peer[0]).is_global
+    except (AttributeError, ValueError, TypeError):
+        return False
+
+
 def _tool_http_get(url: str, **kwargs) -> dict:
     """Fetch a web page. Returns text content and metadata."""
-    parsed = urlparse(url)
-    if parsed.hostname:
-        _rate_limit_domain(parsed.hostname)
-    # Validate URL before making request
-    if parsed.scheme not in ("http", "https"):
-        return {"status": "failed", "error": f"Blocked URL scheme: {parsed.scheme}", "url": url}
-    # Block private/internal IPs
-    hostname = parsed.hostname or ""
-    if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-        return {"status": "failed", "error": "Blocked: internal host", "url": url}
-    if hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("172.16."):
-        return {"status": "failed", "error": "Blocked: private IP range", "url": url}
-    if hostname.startswith("192.168."):
-        return {"status": "failed", "error": "Blocked: private IP range", "url": url}
     try:
-        resp = httpx.get(url, timeout=_DEFAULT_TIMEOUT, headers=_DEFAULT_HEADERS,
-                        follow_redirects=True, verify=_SSL_CONTEXT)
-        content = resp.text[:50000]  # truncate to 50KB to avoid overwhelming LLM context
-        return {
-            "status": "success" if 200 <= resp.status_code < 300 else "failed",
-            "status_code": resp.status_code,
-            "content": content,
-            "content_type": resp.headers.get("content-type", "unknown"),
-            "url": str(resp.url),  # final URL after redirects
-        }
+        current_url = url
+        for _ in range(_MAX_REDIRECTS + 1):
+            error = _public_url_error(current_url)
+            if error:
+                return {"status": "failed", "error": error, "url": current_url}
+            parsed = urlparse(current_url)
+            _rate_limit_domain(parsed.hostname or "")
+            resp = httpx.get(
+                current_url,
+                timeout=_DEFAULT_TIMEOUT,
+                headers=_DEFAULT_HEADERS,
+                follow_redirects=False,
+                verify=_SSL_CONTEXT,
+            )
+            if not _response_peer_is_public(resp):
+                return {
+                    "status": "failed",
+                    "error": "Blocked: connected peer is not public",
+                    "url": current_url,
+                }
+            if 300 <= resp.status_code < 400 and resp.headers.get("location"):
+                current_url = urljoin(current_url, resp.headers["location"])
+                continue
+            content = resp.text[:50000]  # bound LLM context and process memory
+            return {
+                "status": "success" if 200 <= resp.status_code < 300 else "failed",
+                "status_code": resp.status_code,
+                "content": content,
+                "content_type": resp.headers.get("content-type", "unknown"),
+                "url": str(getattr(resp, "url", current_url) or current_url),
+            }
+        return {"status": "failed", "error": "Too many redirects", "url": current_url}
     except httpx.TimeoutException:
         return {"status": "failed", "error": "Request timeout after 15s", "url": url}
     except Exception as e:
         return {"status": "failed", "error": str(e)[:200], "url": url}
 
 
+def _usable_search_key(value: str) -> bool:
+    candidate = (value or "").strip()
+    if not candidate:
+        return False
+    lowered = candidate.lower()
+    return not any(
+        marker in lowered
+        for marker in ("replace", "changeme", "your_api_key")
+    )
+
+
+def _normalize_search_results(
+    payload: Any,
+    *,
+    provider: str,
+    snippet_fields: tuple[str, ...],
+    limit: int,
+) -> list[dict]:
+    """Validate provider JSON and return the stable tool result schema."""
+    if not isinstance(payload, list):
+        raise _SearchProviderFailure("invalid_schema")
+    normalized: list[dict] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title")
+        url = item.get("url")
+        if not isinstance(title, str) or not title.strip():
+            continue
+        if not isinstance(url, str):
+            continue
+        parsed = urlparse(url.strip())
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+        ):
+            continue
+        snippet = ""
+        for field in snippet_fields:
+            value = item.get(field)
+            if isinstance(value, str):
+                snippet = value
+                break
+        normalized.append({
+            "title": re.sub(r"[\x00-\x1f]+", " ", title).strip()[:300],
+            "url": url.strip()[:2048],
+            "snippet": re.sub(r"[\x00-\x1f]+", " ", snippet).strip()[:2000],
+        })
+        if len(normalized) >= limit:
+            break
+    if not normalized:
+        raise _SearchProviderFailure(
+            "empty_results" if not payload else "invalid_schema"
+        )
+    return normalized
+
+
+def _response_json(response: httpx.Response) -> dict:
+    if not 200 <= response.status_code < 300:
+        raise _SearchProviderFailure(f"http_{response.status_code}")
+    try:
+        payload = response.json()
+    except (TypeError, ValueError):
+        raise _SearchProviderFailure("invalid_json") from None
+    if not isinstance(payload, dict):
+        raise _SearchProviderFailure("invalid_schema")
+    return payload
+
+
+def _tavily_search(query: str, num_results: int) -> list[dict]:
+    response = httpx.post(
+        _TAVILY_SEARCH_URL,
+        headers={
+            "Authorization": f"Bearer {TAVILY_API_KEY}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        json={
+            "query": query,
+            "max_results": num_results,
+            "search_depth": TAVILY_SEARCH_DEPTH,
+        },
+        timeout=_SEARCH_API_TIMEOUT,
+        follow_redirects=False,
+        verify=_SSL_CONTEXT,
+    )
+    payload = _response_json(response)
+    return _normalize_search_results(
+        payload.get("results"),
+        provider="tavily",
+        snippet_fields=("content",),
+        limit=num_results,
+    )
+
+
+def _brave_search(query: str, num_results: int) -> list[dict]:
+    response = httpx.get(
+        _BRAVE_SEARCH_URL,
+        headers={
+            "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
+            "Accept": "application/json",
+        },
+        params={"q": query, "count": num_results},
+        timeout=_SEARCH_API_TIMEOUT,
+        follow_redirects=False,
+        verify=_SSL_CONTEXT,
+    )
+    payload = _response_json(response)
+    web = payload.get("web")
+    if not isinstance(web, dict):
+        raise _SearchProviderFailure("invalid_schema")
+    return _normalize_search_results(
+        web.get("results"),
+        provider="brave",
+        snippet_fields=("description",),
+        limit=num_results,
+    )
+
+
+def _provider_error_code(error: Exception) -> str:
+    if isinstance(error, _SearchProviderFailure):
+        return error.code
+    if isinstance(error, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(error, httpx.HTTPError):
+        return "network_error"
+    return "provider_error"
+
+
+def _record_search_runtime(
+    *,
+    status: str,
+    provider: str | None,
+    attempts: list[dict],
+) -> None:
+    with _search_runtime_lock:
+        _search_runtime.update({
+            "last_status": status,
+            "last_provider": provider,
+            "last_attempts": [dict(item) for item in attempts],
+            "updated_at": int(time.time()),
+        })
+
+
+def search_provider_status() -> dict:
+    """Return secret-free configuration/runtime status for health and audits."""
+    tavily_ready = _usable_search_key(TAVILY_API_KEY)
+    brave_ready = _usable_search_key(BRAVE_SEARCH_API_KEY)
+    primary = "tavily" if tavily_ready else ("brave" if brave_ready else None)
+    with _search_runtime_lock:
+        runtime = {
+            "last_status": _search_runtime["last_status"],
+            "last_provider": _search_runtime["last_provider"],
+            "last_attempts": [
+                dict(item) for item in _search_runtime["last_attempts"]
+            ],
+            "updated_at": _search_runtime["updated_at"],
+        }
+    return {
+        "official_api_ready": primary is not None,
+        "primary_provider": primary,
+        "mode": "official_api" if primary else "html_fallback_only",
+        "probe": "configuration_only",
+        "providers": {
+            "tavily": {"configured": tavily_ready},
+            "brave": {"configured": brave_ready},
+        },
+        "html_fallback_enabled": True,
+        "last_attempt": runtime if runtime["last_status"] != "never" else None,
+    }
+
+
 def _tool_search_web(query: str, num_results: int = 5, **kwargs) -> dict:
-    """Search the web using Baidu (best for Chinese auto data) + Bing as fallback.
-    Returns titles, URLs, and snippets."""
-    num_results = min(num_results, 10)
-
-    # Strategy 1: Baidu search (best for Chinese content, has AI summaries with data)
+    """Search Tavily → Brave → Baidu HTML → Bing HTML with audited fallback."""
+    if not isinstance(query, str) or not query.strip():
+        return {
+            "status": "failed",
+            "error": "Search query must be a non-empty string",
+            "error_code": "invalid_query",
+            "query": "",
+            "provider_attempts": [],
+        }
+    query = query.strip()[:1000]
     try:
-        results = _baidu_search(query, num_results)
-        if results:
-            return {
-                "status": "success",
-                "query": query,
-                "source": "baidu",
-                "results": results,
-                "total_found": len(results),
-            }
-    except Exception as e:
-        _log.warning("Baidu search failed: %s", e)
+        num_results = min(max(int(num_results), 1), 10)
+    except (TypeError, ValueError):
+        num_results = 5
 
-    # Strategy 2: Bing HTML search
-    try:
-        results = _bing_html_search(query, num_results)
-        if results:
-            return {
-                "status": "success",
-                "query": query,
-                "source": "bing",
-                "results": results,
-                "total_found": len(results),
-            }
-    except Exception as e:
-        _log.warning("Bing HTML search failed: %s", e)
+    attempts: list[dict] = []
+    official_providers = (
+        ("tavily", TAVILY_API_KEY, _tavily_search, "tavily_api"),
+        ("brave", BRAVE_SEARCH_API_KEY, _brave_search, "brave_api"),
+    )
+    for name, api_key, search, source in official_providers:
+        if not _usable_search_key(api_key):
+            attempts.append({"provider": name, "status": "not_configured"})
+            continue
+        try:
+            results = search(query, num_results)
+        except Exception as error:  # noqa: BLE001
+            code = _provider_error_code(error)
+            attempts.append({
+                "provider": name,
+                "status": "failed",
+                "error_code": code,
+            })
+            _log.warning("Official search provider %s failed (%s)", name, code)
+            continue
+        attempts.append({"provider": name, "status": "success"})
+        _record_search_runtime(
+            status="success",
+            provider=name,
+            attempts=attempts,
+        )
+        return {
+            "status": "success",
+            "query": query,
+            "source": source,
+            "results": results,
+            "total_found": len(results),
+            "provider_attempts": attempts,
+        }
 
-    return {"status": "failed", "error": "All search strategies failed", "query": query}
+    html_providers = (
+        ("baidu_html", _baidu_search),
+        ("bing_html", _bing_html_search),
+    )
+    for name, search in html_providers:
+        try:
+            raw_results = search(query, num_results)
+            results = _normalize_search_results(
+                raw_results,
+                provider=name,
+                snippet_fields=("snippet",),
+                limit=num_results,
+            )
+        except Exception as error:  # noqa: BLE001
+            code = _provider_error_code(error)
+            attempts.append({
+                "provider": name,
+                "status": "failed",
+                "error_code": code,
+            })
+            _log.warning("HTML search provider %s failed (%s)", name, code)
+            continue
+        attempts.append({"provider": name, "status": "success"})
+        _record_search_runtime(
+            status="success",
+            provider=name,
+            attempts=attempts,
+        )
+        return {
+            "status": "success",
+            "query": query,
+            "source": name,
+            "results": results,
+            "total_found": len(results),
+            "provider_attempts": attempts,
+        }
+
+    _record_search_runtime(status="failed", provider=None, attempts=attempts)
+    return {
+        "status": "failed",
+        "error": "All search strategies failed",
+        "error_code": "search_unavailable",
+        "query": query,
+        "provider_attempts": attempts,
+    }
 
 
 def _baidu_search(query: str, num_results: int = 5) -> list:
@@ -242,31 +554,20 @@ def _tool_browser_fetch(url: str, wait_for: str = "", **kwargs) -> dict:
     import asyncio
     import random
 
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return {"status": "failed", "error": f"Blocked URL scheme: {parsed.scheme}", "url": url}
-    hostname = parsed.hostname or ""
-    if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-        return {"status": "failed", "error": "Blocked: internal host", "url": url}
-
-    # Try crawl4ai first (full anti-bot stack), then fall back to raw playwright
-    try:
-        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-        return _browser_fetch_crawl4ai(url, wait_for)
-    except ImportError:
-        pass
+    error = _public_url_error(url)
+    if error:
+        return {"status": "failed", "error": error, "url": url}
 
     try:
         from playwright.async_api import async_playwright
     except ImportError:
-        _log.warning("Neither crawl4ai nor playwright installed, falling back to httpx")
+        _log.warning("Playwright is not installed, falling back to hardened httpx")
         return _tool_http_get(url)
 
     async def _do_fetch():
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
-                channel="msedge",
                 args=_STEALTH_ARGS,
             )
             context = await browser.new_context(
@@ -274,6 +575,17 @@ def _tool_browser_fetch(url: str, wait_for: str = "", **kwargs) -> dict:
                 viewport={"width": 1920, "height": 1080},
                 locale="zh-CN",
             )
+            async def _guard_route(route, request):
+                request_scheme = urlparse(request.url).scheme
+                if request_scheme in ("data", "blob", "about"):
+                    await route.continue_()
+                    return
+                if _public_url_error(request.url):
+                    await route.abort("blockedbyclient")
+                    return
+                await route.continue_()
+
+            await context.route("**/*", _guard_route)
             page = await context.new_page()
             await page.add_init_script(_STEALTH_JS)
 
@@ -288,6 +600,9 @@ def _tool_browser_fetch(url: str, wait_for: str = "", **kwargs) -> dict:
                 await page.wait_for_timeout(2500)
 
                 status_code = resp.status if resp else 0
+                final_error = _public_url_error(page.url)
+                if final_error:
+                    return {"status": "failed", "error": final_error, "url": page.url}
                 # Extract visible text (more accurate than regex HTML stripping)
                 try:
                     text = await page.inner_text('body')
@@ -323,66 +638,11 @@ def _tool_browser_fetch(url: str, wait_for: str = "", **kwargs) -> dict:
         else:
             return asyncio.run(_do_fetch())
     except Exception as e:
-        _log.error("browser_fetch failed: %s", e)
-        return {"status": "failed", "error": str(e)[:200], "url": url, "method": "playwright_stealth"}
-
-
-def _browser_fetch_crawl4ai(url: str, wait_for: str = "") -> dict:
-    """Use crawl4ai's full anti-bot stack (preferred when available)."""
-    import asyncio
-    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-
-    browser_cfg = BrowserConfig(
-        headless=True,
-        browser_type="chromium",
-        user_agent_mode="random",
-        text_mode=True,
-    )
-
-    run_cfg = CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        delay_before_return_html=1.5,
-        page_timeout=30000,
-        word_count_threshold=10,
-    )
-    if wait_for:
-        run_cfg.wait_for = f"css:{wait_for}"
-
-    async def _do_crawl():
-        async with AsyncWebCrawler(config=browser_cfg) as crawler:
-            return await crawler.arun(url, config=run_cfg)
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(1) as pool:
-            result = pool.submit(lambda: asyncio.run(_do_crawl())).result(timeout=60)
-    else:
-        result = asyncio.run(_do_crawl())
-
-    if result.success:
-        content = (result.markdown or result.cleaned_html or "")[:50000]
-        return {
-            "status": "success",
-            "content": content,
-            "content_type": "text/markdown",
-            "url": str(result.url) if hasattr(result, 'url') else url,
-            "method": "crawl4ai_stealth",
-        }
-    else:
-        return {
-            "status": "failed",
-            "error": getattr(result, 'error_message', 'Unknown crawl error')[:200],
-            "url": url,
-            "method": "crawl4ai_stealth",
-        }
-
-
+        _log.warning("Playwright unavailable at runtime, falling back to httpx: %s", e)
+        result = _tool_http_get(url)
+        result.setdefault("fallback_reason", str(e)[:200])
+        result["method"] = "httpx_fallback"
+        return result
 def _tool_dongchedi_rank(month: str = "", energy_type: str = "", brand_id: str = "",
                           count: int = 20, **kwargs) -> dict:
     """Fetch car sales ranking from dongchedi internal API. No login required.
@@ -464,8 +724,18 @@ def _tool_parse_html(html: str, **kwargs) -> dict:
         return {"status": "failed", "error": str(e)[:200], "text": ""}
 
 
-def _tool_write_to_rag(title: str, content: str, source_url: str = "", **kwargs) -> dict:
-    """Write collected content into the RAG knowledge base as a public document (user_id=0).
+def _tool_write_to_rag(
+    title: str,
+    content: str,
+    source_url: str = "",
+    user_id: int = 0,
+    public: bool = False,
+    **kwargs,
+) -> dict:
+    """Write collected content into the RAG knowledge base.
+
+    The deterministic pipeline passes ``public=False`` and the initiating
+    user id. Public documents are reserved for the explicit seed-corpus flow.
     Uses the existing local_ingest pipeline (chunk → embed → store)."""
     try:
         # Construct a markdown document from the collected data
@@ -478,6 +748,8 @@ def _tool_write_to_rag(title: str, content: str, source_url: str = "", **kwargs)
             text=md_text,
             filename=filename,
             source_url=source_url,
+            user_id=user_id,
+            public=public,
         )
         return {
             "status": "success",
@@ -552,7 +824,7 @@ TOOL_SCHEMAS: dict[str, dict] = {
         "type": "function",
         "function": {
             "name": "search_web",
-            "description": "Search the web for information. Returns titles, URLs, and snippets.",
+            "description": "Search through Tavily, then Brave, with audited Baidu/Bing HTML fallback. Returns normalized titles, URLs, snippets, and provider attempts.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -619,13 +891,19 @@ def execute_tool(tool_name: str, arguments: dict) -> dict:
 
 # ── RAG write helper (reuses existing pipeline) ────────────────────────────────
 
-def ingest_text_as_document(title: str, text: str, filename: str = "agent_collected.md",
-                            source_url: str = "", public: bool = True) -> tuple[int, int]:
+def ingest_text_as_document(
+    title: str,
+    text: str,
+    filename: str = "agent_collected.md",
+    source_url: str = "",
+    user_id: int = 0,
+    public: bool = False,
+) -> tuple[int, int]:
     """Write a text document through the RAG ingest pipeline.
 
     Uses local_ingest when RAG_BACKEND=local (default), pg ingest when RAG_BACKEND=pg.
-    public=True writes as user_id=None (visible to all users).
-    public=False writes as user_id=0 (system user, also public in local_store semantics).
+    Public documents use the backend's system-owner convention. Private
+    documents use the initiating user's id.
     """
     from .config import RAG_BACKEND
 
@@ -637,25 +915,28 @@ def ingest_text_as_document(title: str, text: str, filename: str = "agent_collec
         from .rag.chunk import build_chunks
         from .rag.parse import parse_document
 
-        source_uri = store.put_bytes(0, filename, data, "text/markdown")
-        doc_id = pg.create_document(0, filename, file_type, source_uri, title=title)
+        owner = None if public else user_id
+        source_uri = store.put_bytes(owner, filename, data, "text/markdown")
+        doc_id = pg.create_document(owner, filename, file_type, source_uri, title=title)
         blocks = parse_document(data, file_type)
         chunks = build_chunks(blocks, count_tokens=embed.count_tokens)
         children = [c for c in chunks if c["is_retrievable"]]
         vecs = embed.embed_passages([c["content_embed"] for c in children])
         emb_by_idx = {c["chunk_index"]: v for c, v in zip(children, vecs)}
-        n = pg.insert_chunks(doc_id, 0, chunks, emb_by_idx)
+        n = pg.insert_chunks(doc_id, owner, chunks, emb_by_idx)
         pg.set_status(doc_id, "ready", chunk_count=n)
         return doc_id, n
     else:
-        # RAG_BACKEND=local — write as public document
-        try:
-            from .rag.local_ingest import ingest_bytes as local_ingest_bytes
-            return local_ingest_bytes(0, filename, data, file_type, title=title, public=True)
-        except TypeError:
-            # Fallback: older local_ingest might not support public param
-            from .rag.local_ingest import ingest_bytes as local_ingest_bytes
-            return local_ingest_bytes(0, filename, data, file_type, title=title)
+        from .rag.local_ingest import ingest_bytes as local_ingest_bytes
+        return local_ingest_bytes(
+            user_id,
+            filename,
+            data,
+            file_type,
+            title=title,
+            public=public,
+            source_uri=source_url or "agent://auto-collect",
+        )
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────

@@ -1,13 +1,13 @@
-"""清洗入库脚本（T4）：raw JSONL → 清洗 → 拆 6 表 → SQLite bi_demo.db（幂等 UPSERT）。
+"""清洗入库脚本（T4）：raw JSONL → 清洗 → 拆 6 表 → SQLite bi_demo.db（事务式事实快照）。
 
 数据流：
   data/raw/sales_rank_raw.jsonl
        ↓  字段重命名 / 类型转换 / 空值处理 / 去重
   bi_demo.db（6 张表，Kimball 星型模型）
-  ├── dim_brand      (101 品牌)
-  ├── dim_series     (409 车系，含 segment / endurance_km 口碑页补充)
+  ├── dim_brand      (数量随最新快照变化)
+  ├── dim_series     (含 segment / endurance_km 口碑页补充)
   ├── dim_date       (YYYYMM 日期维度)
-  ├── fact_sales_rank (销量事实，UNIQUE 防重复 UPSERT)
+  ├── fact_sales_rank (销量事实；每次按完整 raw 快照事务重建)
   ├── fact_price      (报价快照)
   └── fact_review     (口碑评分)
 
@@ -19,7 +19,11 @@ import sqlite3
 from pathlib import Path
 
 RAW_FILE = Path(__file__).parent / "raw" / "sales_rank_raw.jsonl"
+KOUBEI_FILE = Path(__file__).parent / "raw" / "koubei_series_detail.jsonl"
 DB_FILE  = Path(__file__).parent.parent / "bi_demo.db"
+POWERTRAIN_MAP = {1: "纯电", 2: "插混", 3: "增程"}
+RANK_TYPE_SALES = 11
+ETL_VERSION = "v1.0"
 
 
 # ------------------------------------------------------------------ 字段清洗函数
@@ -67,7 +71,11 @@ def norm_score(score) -> float | None:
     """懂车帝评分 ×100 整数 → 浮点分数；0 / None → None。"""
     if not score:
         return None
-    return round(float(score) / 100, 1)
+    value = float(score)
+    # 历史 raw 保存 404，新版采集器可能已经保存 4.04；两种口径都兼容。
+    if value > 10:
+        value /= 100
+    return round(value, 1)
 
 
 def norm_text(text: str | None) -> str | None:
@@ -80,7 +88,41 @@ def norm_text(text: str | None) -> str | None:
 
 def infer_powertrain(energy_type: int) -> str:
     """懂车帝 new_energy_type 枚举 → 内部 powertrain 标签。"""
-    return {1: "BEV", 2: "PHEV", 3: "EREV"}.get(energy_type, "NEV")
+    return POWERTRAIN_MAP.get(energy_type, "新能源")
+
+
+def load_koubei(path: Path = KOUBEI_FILE) -> dict[int, dict]:
+    """读取口碑详情快照，按 ``series_id`` 以后出现的记录覆盖旧记录。"""
+    if not path.exists():
+        return {}
+
+    result: dict[int, dict] = {}
+    with path.open("r", encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path} 第 {line_number} 行不是合法 JSON") from exc
+            series_id = row.get("series_id")
+            if series_id is None:
+                continue
+            config = row.get("pc_config") or {}
+            endurance_text = (
+                row.get("recharge_mileage")
+                or config.get("recharge_mileage")
+            )
+            result[int(series_id)] = {
+                "segment": norm_text(row.get("car_type")),
+                "endurance_km": (
+                    row.get("endurance_km")
+                    if row.get("endurance_km") is not None
+                    else parse_endurance(endurance_text)
+                ),
+                "score": norm_score(row.get("total_score")),
+            }
+    return result
 
 
 # ------------------------------------------------------------------ DDL
@@ -146,35 +188,98 @@ def run():
         raise SystemExit(f"原始数据不存在：{RAW_FILE}\n请先运行 data/crawl_sales.py")
 
     print(f"读取 {RAW_FILE} ...")
-    rows = [json.loads(line) for line in RAW_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
-    print(f"共 {len(rows)} 行原始记录")
+    raw_rows = [
+        json.loads(line)
+        for line in RAW_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    # 历史 append 文件可能已有重复；与采集器使用同一业务主键，最后快照覆盖。
+    rows_by_key = {}
+    for row in raw_rows:
+        key = (str(row["_month"]), int(row["_new_energy_type"]), row["series_id"])
+        rows_by_key[key] = row
+    rows = list(rows_by_key.values())
+    print(f"共 {len(raw_rows)} 行原始记录，按业务主键去重后 {len(rows)} 行")
 
     conn = sqlite3.connect(DB_FILE)
     conn.executescript(DDL)
 
     brands, series, dates = {}, {}, {}
+    koubei = load_koubei()
 
     for r in rows:
         # 维度去重收集
         brands[r["brand_id"]] = r["brand_name"]
+        detail = koubei.get(int(r["series_id"]), {})
+        guide_min = r.get("min_price")
+        guide_max = r.get("max_price")
+        parsed_min, parsed_max = parse_price_range(r.get("price"))
         series[r["series_id"]] = {
             "series_name": r["series_name"],
             "brand_id":    r["brand_id"],
             "powertrain":  infer_powertrain(r["_new_energy_type"]),
+            "segment": detail.get("segment"),
+            "endurance_km": detail.get("endurance_km"),
+            "guide_price_min": guide_min if isinstance(guide_min, (int, float)) else parsed_min,
+            "guide_price_max": guide_max if isinstance(guide_max, (int, float)) else parsed_max,
+            "image_url": norm_text(r.get("image")),
         }
-        yyyymm = int(r["_month"])
-        if yyyymm not in dates:
-            y, m = yyyymm // 100, yyyymm % 100
-            dates[yyyymm] = {"year": y, "month": m, "quarter": (m - 1) // 3 + 1, "ym": r["_month"]}
+        date_id, year, month, quarter, ym = parse_month(r["_month"])
+        dates[date_id] = {
+            "year": year,
+            "month": month,
+            "quarter": quarter,
+            "ym": ym,
+        }
 
     # 写维度表
-    conn.executemany("INSERT OR IGNORE INTO dim_brand VALUES(?,?)", brands.items())
     conn.executemany(
-        "INSERT OR IGNORE INTO dim_series(series_id,series_name,brand_id,powertrain) VALUES(?,?,?,?)",
-        [(sid, v["series_name"], v["brand_id"], v["powertrain"]) for sid, v in series.items()])
+        "INSERT INTO dim_brand(brand_id,brand_name) VALUES(?,?) "
+        "ON CONFLICT(brand_id) DO UPDATE SET brand_name=excluded.brand_name",
+        brands.items(),
+    )
     conn.executemany(
-        "INSERT OR IGNORE INTO dim_date VALUES(?,?,?,?,?)",
-        [(k, v["year"], v["month"], v["quarter"], v["ym"]) for k, v in dates.items()])
+        "INSERT INTO dim_series(series_id,series_name,brand_id,segment,powertrain,endurance_km,"
+        "guide_price_min,guide_price_max,image_url) "
+        "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(series_id) DO UPDATE SET "
+        "series_name=excluded.series_name,brand_id=excluded.brand_id,"
+        "segment=COALESCE(excluded.segment,dim_series.segment),"
+        "powertrain=excluded.powertrain,"
+        "endurance_km=COALESCE(excluded.endurance_km,dim_series.endurance_km),"
+        "guide_price_min=excluded.guide_price_min,"
+        "guide_price_max=excluded.guide_price_max,"
+        "image_url=excluded.image_url",
+        [
+            (
+                sid,
+                value["series_name"],
+                value["brand_id"],
+                value["segment"],
+                value["powertrain"],
+                value["endurance_km"],
+                value["guide_price_min"],
+                value["guide_price_max"],
+                value["image_url"],
+            )
+            for sid, value in series.items()
+        ],
+    )
+    conn.executemany(
+        "INSERT INTO dim_date(date_id,year,month,quarter,ym) VALUES(?,?,?,?,?) "
+        "ON CONFLICT(date_id) DO UPDATE SET year=excluded.year,month=excluded.month,"
+        "quarter=excluded.quarter,ym=excluded.ym",
+        [
+            (key, value["year"], value["month"], value["quarter"], value["ym"])
+            for key, value in dates.items()
+        ],
+    )
+
+    # crawler 会把历史分区与本次刷新分区原子合并成一个完整 JSONL 快照，因此这里
+    # 在同一事务中重建事实表。只做 UPSERT 会留下上游榜单已移除的旧车系，正是此前
+    # “相邻月份看起来完全相同/总行数比原始记录多”的污染来源。
+    conn.execute("DELETE FROM fact_sales_rank")
+    conn.execute("DELETE FROM fact_price")
+    conn.execute("DELETE FROM fact_review")
 
     # 写事实表
     for r in rows:
@@ -194,16 +299,23 @@ def run():
              r.get("rank"), last_rank, volume))
 
         conn.execute(
-            "INSERT OR IGNORE INTO fact_price"
+            "INSERT INTO fact_price"
             "(series_id,date_id,guide_price_min,guide_price_max,price_text,dealer_price_text,has_dealer_price)"
             " VALUES(?,?,?,?,?,?,?)",
             (r["series_id"], date_id, pmin, pmax2 or pmax,
-             r.get("min_price"), r.get("dealer_price"),
+             r.get("price"), r.get("dealer_price"),
              1 if r.get("dealer_price") else 0))
 
+        detail = koubei.get(int(r["series_id"]), {})
         conn.execute(
-            "INSERT OR IGNORE INTO fact_review(series_id,date_id,review_count,score) VALUES(?,?,?,NULL)",
-            (r["series_id"], date_id, r.get("car_review_count") or 0))
+            "INSERT INTO fact_review(series_id,date_id,review_count,score) VALUES(?,?,?,?)",
+            (
+                r["series_id"],
+                date_id,
+                r.get("car_review_count") or 0,
+                detail.get("score"),
+            ),
+        )
 
     conn.commit()
 

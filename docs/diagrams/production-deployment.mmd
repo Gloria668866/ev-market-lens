@@ -1,0 +1,43 @@
+flowchart TB
+  USER["公网浏览器"] -->|"仅 80 / 443"| CADDY
+  LLM["OpenAI-compatible<br/>对话模型 API"]
+  SEARCH["官方 Web Search API<br/>Tavily → Brave<br/>至少配置一个才能 ready"]
+  MODELS[("宿主机 BGE / reranker 权重<br/>只读挂载 /models")]
+
+  subgraph VPS["单台云 VPS · Docker Compose"]
+    CADDY["Caddy<br/>HTTPS + 前端静态资源 + API 反代"]
+    API["FastAPI API<br/>/ready 健康检查"]
+    WORKER["Celery worker<br/>RAG 入库 / 研究链 / 月度刷新"]
+    BEAT["Celery beat<br/>每月 8、15 日触发销量刷新"]
+    PG[("PostgreSQL 16 + pgvector<br/>app 库 + bi 库")]
+    REDIS[("Redis<br/>broker / backend / 进度")]
+    MINIO[("MinIO<br/>上传原文")]
+    INIT["minio-init<br/>一次性建桶"]
+    MIGRATE["migrate<br/>幂等应用/RAG schema 迁移"]
+    RAW[("宿主机 data/raw<br/>worker 读写绑定挂载")]
+    VOLS[("持久卷<br/>pg / redis / minio / caddy")]
+  end
+
+  CADDY --> API
+  PG --> MIGRATE
+  MIGRATE -->|"成功后启动"| API
+  MIGRATE -->|"成功后启动"| WORKER
+  API --> PG
+  API --> REDIS
+  API --> MINIO
+  API --> LLM
+  API --> MODELS
+  WORKER --> PG
+  WORKER --> REDIS
+  WORKER --> MINIO
+  WORKER --> MODELS
+  WORKER --> LLM
+  WORKER --> SEARCH
+  WORKER --> RAW
+  BEAT --> REDIS
+  REDIS --> WORKER
+  INIT --> MINIO
+  PG --> VOLS
+  REDIS --> VOLS
+  MINIO --> VOLS
+  CADDY --> VOLS

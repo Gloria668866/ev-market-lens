@@ -1,0 +1,71 @@
+erDiagram
+    dim_brand  ||--o{ dim_series : "1:N"
+    dim_series ||--o{ fact_sales_rank : has
+    dim_series ||--o{ fact_price : has
+    dim_series ||--o{ fact_review : has
+    dim_date   ||--o{ fact_sales_rank : by_month
+    dim_date   ||--o{ fact_price : snapshot
+    dim_date   ||--o{ fact_review : snapshot
+    dim_brand {
+        int brand_id PK
+        string brand_name
+        int sub_brand_id
+        string sub_brand_name
+        string country_type "optional enrich"
+        boolean is_new_force "optional enrich"
+    }
+    dim_series {
+        int series_id PK
+        string series_name
+        int brand_id FK
+        int sub_brand_id
+        string segment
+        string powertrain "纯电/插混/增程"
+        int endurance_km
+        num guide_price_min
+        num guide_price_max
+        string image_url
+    }
+    dim_date {
+        int date_id PK "YYYYMM"
+        int year
+        int month
+        int quarter
+        string ym "YYYY-MM"
+    }
+    fact_sales_rank {
+        bigint id PK
+        int series_id FK
+        int date_id FK
+        int new_energy_type "1纯电2插混3增程"
+        int rank_type "11销量榜"
+        int rank
+        int last_rank
+        int volume
+        string source
+        string source_url
+        timestamp crawl_time
+    }
+    fact_price {
+        bigint id PK
+        int series_id FK
+        int date_id FK
+        date snapshot_date
+        num guide_price_min
+        num guide_price_max
+        string price_text
+        string dealer_price_text
+        boolean has_dealer_price
+        num descender_price
+        string source
+    }
+    fact_review {
+        bigint id PK
+        int series_id FK
+        int date_id FK
+        date snapshot_date
+        int review_count
+        num score "optional"
+        string sentiment "optional"
+        string source
+    }

@@ -1,0 +1,31 @@
+flowchart TB
+    subgraph TRIGGER["触发方式"]
+        CLI["本地/运维手动运行<br/>python data/crawl_sales.py"]
+        BEAT["生产 Celery beat<br/>每月 8、15 日 03:00"]
+        WORKER["Celery worker<br/>执行 monthly_sales_refresh"]
+        BEAT --> WORKER
+    end
+    subgraph PLAN["增量计划"]
+        EXIST["读取已有 JSONL"] --> PART["识别月份 × 能源类型分区"]
+        PART --> TODO["补采缺失分区<br/>并强制刷新最近两个完整月"]
+    end
+    subgraph FETCH["标准库 HTTP 采集"]
+        REQ["urllib 请求公开 JSON API<br/>超时 + 有限重试 + 节流"] --> PUB{"sells_rank_month<br/>已发布到请求月份？"}
+        PUB -->|"否：源站静默回退"| REJECT["拒绝写入并保留旧分区"]
+        PUB -->|"是"| PAGE["按 count / offset 分页"]
+        PAGE --> VALID["校验响应与 series_id"]
+    end
+    subgraph WRITE["幂等落地"]
+        DEDUPE["按 month + energy_type + series_id 去重"] --> KEEP["新分区成功才替换旧分区<br/>空响应保留旧数据"]
+        KEEP --> ATOMIC["同目录临时文件 + fsync + os.replace"]
+        ATOMIC --> OUT[("data/raw/sales_rank_raw.jsonl<br/>宿主机 data/raw 绑定挂载")]
+    end
+    CLI --> EXIST
+    WORKER --> EXIST
+    TODO --> REQ
+    VALID --> DEDUPE
+    OUT --> LOAD["clean_load.py 或 load_analysis_pg.py<br/>幂等加载分析库"]
+    classDef a fill:#E8F0FE,stroke:#4285F4,color:#000;
+    classDef b fill:#FCE8E6,stroke:#EA4335,color:#000;
+    classDef c fill:#E6F4EA,stroke:#34A853,color:#000;
+    class CLI,BEAT,WORKER,EXIST,PART,TODO a; class REQ,PUB,REJECT,PAGE,VALID b; class DEDUPE,KEEP,ATOMIC,OUT,LOAD c;

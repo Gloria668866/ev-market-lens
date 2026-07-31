@@ -1,6 +1,6 @@
 """入库编排：把一个文档变成可检索的父子分块向量。
 
-流程（PRD-2 §5.2，五步）：
+流程（见技术设计第 5.1 节）：
   存 MinIO → 解析(parse) → 父子分块(chunk) → BGE 向量化(只给子块) → 写 kb_chunk → kb_document.status=ready
   任一步抛错 → status=failed（前端轮询能看到）。
 

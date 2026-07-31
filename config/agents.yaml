@@ -13,6 +13,7 @@ pipeline:
       agent: code_agent
       depends_on: [plan]
       parallel: true               # one instance per plan item
+      max_parallel: 3              # bounded fan-out; protects API quota and 2C8G demo hosts
       description: "Execute web collection in parallel"
     - id: review
       agent: review_agent
@@ -132,7 +133,9 @@ tool_permissions:
   research_agent: []               # research only analyzes, doesn't execute
   plan_agent: []                   # plan only structures, doesn't execute
   code_agent: [http_get, browser_fetch, dongchedi_rank, search_web, parse_html]
-  review_agent: [write_to_rag]     # review writes results to knowledge base
+  # Pipeline code writes reviewed output deterministically with the initiating
+  # user_id; the LLM must not autonomously publish a document as public.
+  review_agent: []
 
 redis:
   progress_ttl_seconds: 1800       # pipeline progress keys expire after 30 min

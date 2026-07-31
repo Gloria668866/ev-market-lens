@@ -1,0 +1,47 @@
+sequenceDiagram
+  participant U as 用户
+  participant A as LangGraph 数据脑
+  participant L as LLM
+  participant G as sqlglot 护栏
+  participant DB as 分析库（本地 SQLite / 生产只读 PG）
+  U->>A: 自然语言问题
+  A->>A: schema_link（当前六表返回全量快照；规模增长后筛表）
+  A->>L: 生成 SQL
+  L-->>A: SQL v1
+  A->>G: AST 解析、单语句、只读 SELECT、行数上限
+  alt 护栏拒绝
+    G-->>A: 拒绝原因
+    A->>L: 原 SQL + 错误原因，请修正
+    L-->>A: 新 SQL
+    Note over A,G: 返回 exec_sql 重新校验；只在重试预算内循环
+  else 护栏通过
+    G-->>A: 安全 SQL
+    A->>DB: 执行查询
+    alt 执行报错
+      DB-->>A: 数据库错误
+      A->>L: 原 SQL + 数据库错误，请修正
+      L-->>A: 新 SQL
+      Note over A,DB: 返回 exec_sql；只在重试预算内循环
+    else 执行成功
+      DB-->>A: 列与结果行
+      A->>A: verify_sql（空结果跳过核对）
+      opt 有数据且开启语义校验
+        A->>L: 核对问题、SQL 与结果语义
+        L-->>A: ok / 不匹配原因
+      end
+      alt 语义不匹配且仍有预算
+        A->>L: 原 SQL + 不匹配原因，请修正
+        L-->>A: 新 SQL
+      else 校验通过且有数据
+        A->>A: 规则生成图表描述符 + 数据洞察
+        A-->>U: SSE 返回 SQL、结果、图表与洞察
+      else SQL 成功但结果为空
+        A->>A: 先做公共 + 当前用户 RAG 证据回退
+        A-->>U: 命中则给引用；未命中则返回异步采集任务 ID
+        Note over A,DB: 采集结果只写用户私有 RAG；不写销量事实表，也不自动重跑 SQL
+      end
+    end
+  end
+  opt 任一修复路径重试耗尽
+    A-->>U: 诚实降级，不输出错误图表
+  end

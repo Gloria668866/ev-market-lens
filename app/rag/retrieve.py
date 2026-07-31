@@ -1,4 +1,4 @@
-"""RAG 在线检索-组装-生成（PRD-2 §5.4 / §5.4.1 / §5.5）。
+"""RAG 在线检索、证据门控、父块组装与带引用生成（见技术设计第 5 节）。
 
 全链路：
   query 向量化(加指令前缀) → 混合召回(向量+全文,RRF 融合) → bge-reranker 重排取 Top-K 子块
@@ -9,11 +9,15 @@
 确定性规则兜住（§5.4.1），而不是把碎块直接塞给 LLM 乱拼——这是 RAG 工程化的关键。
 """
 import json
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from . import embed
 from ..llm import chat
 from ..config import (RECALL_VEC_K, RECALL_KW_K, RRF_K, RERANK_TOP_K,
-                      CONTEXT_TOKEN_BUDGET, MAX_PARENTS, RERANK_SCORE_MIN, RAG_BACKEND)
+                      CONTEXT_TOKEN_BUDGET, MAX_PARENTS, RERANK_SCORE_MIN,
+                      RRF_FALLBACK_SCORE_MIN, RAG_BACKEND)
 
 # 存储后端：'pg'(pgvector) ↔ 'local'(SQLite+numpy)，两者接口一致，按 config 切换。
 if RAG_BACKEND == "pg":
@@ -22,6 +26,25 @@ else:
     from . import local_store as store
 
 NO_ANSWER = "未在知识库中找到相关内容，建议上传相关文档后再试。"
+
+
+class RagModelPayload(BaseModel):
+    """Fail-closed contract for the final grounded generation call."""
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    answer: str = Field(default="", max_length=8000)
+    used_sources: list[StrictInt] = Field(default_factory=list, max_length=32)
+    has_answer: bool = False
+
+    @field_validator("used_sources")
+    @classmethod
+    def source_numbers_must_be_positive_and_unique(cls, values: list[int]) -> list[int]:
+        if any(value < 1 for value in values):
+            raise ValueError("source numbers must be positive")
+        if len(values) != len(set(values)):
+            raise ValueError("source numbers must be unique")
+        return values
 
 
 # ============================================================ 召回 + 融合
@@ -40,10 +63,16 @@ def hybrid_recall(user_id: int, query: str):
     vec_hits = store.search(user_id, qv, top_k=RECALL_VEC_K) if qv is not None else []  # 无向量模型→纯词法
     kw_hits = store.keyword_search(user_id, query, top_k=RECALL_KW_K)
     fused = _rrf_fuse(vec_hits, kw_hits)
+    vec_ids = {h["chunk_id"] for h in vec_hits}
+    kw_ids = {h["chunk_id"] for h in kw_hits}
     by_id = {h["chunk_id"]: h for h in (vec_hits + kw_hits)}    # 子块元数据（任一路即可）
     out = []
     for cid, score in sorted(fused.items(), key=lambda x: -x[1]):
         h = dict(by_id[cid]); h["rrf"] = score
+        h["recall_sources"] = [
+            source for source, ids in (("vector", vec_ids), ("keyword", kw_ids))
+            if cid in ids
+        ]
         out.append(h)
     return out
 
@@ -63,6 +92,45 @@ def rerank(query: str, children):
         c["score_final"] = float(s)
     ranked = sorted(children, key=lambda c: -c["score_final"])
     return ranked[:RERANK_TOP_K], True
+
+
+def evidence_is_sufficient(
+    top_children, used_reranker: bool, question: str = ""
+) -> tuple[bool, str]:
+    """Fail closed when the learned reranker is unavailable.
+
+    Reranker mode uses its calibrated absolute score. RRF fallback has no
+    comparable semantic score, so require agreement from vector and keyword
+    recall plus a minimum fused score.
+    """
+    if not top_children:
+        return False, "no_recall"
+    top = top_children[0]
+    score = float(top.get("score_final", 0.0))
+    if used_reranker:
+        if score < RERANK_SCORE_MIN:
+            return False, "low_score"
+        # Cross-encoders can score a generic brand paragraph highly for a model
+        # that is absent (e.g. “奔驰EQS”). Require distinctive latin/model tokens
+        # from the question to occur in at least one top passage.
+        anchors = {
+            token.lower()
+            for token in re.findall(r"[A-Za-z][A-Za-z0-9+.-]{1,}", question or "")
+            if token.lower() not in {"top"}
+        }
+        if anchors:
+            evidence_text = " ".join(
+                str(item.get("content") or "") for item in top_children[:5]
+            ).lower()
+            if not all(anchor in evidence_text for anchor in anchors):
+                return False, "missing_query_anchor"
+        return True, ""
+    sources = set(top.get("recall_sources") or [])
+    if not {"vector", "keyword"}.issubset(sources):
+        return False, "fallback_single_channel"
+    if score < RRF_FALLBACK_SCORE_MIN:
+        return False, "fallback_low_score"
+    return True, ""
 
 
 # ============================================================ 父块归并（§5.4.1 四情形）
@@ -163,34 +231,62 @@ def generate(query: str, blocks):
                temperature=0.0)
     data = _parse_json(raw)
     used = data.get("used_sources") or []
+    answer = data.get("answer", "").strip()
+    inline_sources = {
+        int(value)
+        for value in re.findall(r"\[来源\s*(\d+)\]", answer)
+    }
+    # ``used_sources`` is not enough by itself: without matching inline markers
+    # the UI cannot tell which claim maps to which source.  Fail closed on a
+    # malformed citation contract instead of showing an apparently sourced
+    # answer whose references cannot be audited.
+    citation_contract_ok = (
+        bool(data.get("has_answer"))
+        and bool(answer)
+        and bool(used)
+        and inline_sources == set(used)
+        and all(1 <= n <= len(blocks) for n in used)
+    )
+    if not citation_contract_ok:
+        return {
+            "answer": answer if not data.get("has_answer") and answer else NO_ANSWER,
+            "has_answer": False,
+            "citations": [],
+        }
+
     # 来源编号 → 真实 {doc_id,page_no,chunk_id}（点回原文）
     citations = []
     for n in used:
-        if isinstance(n, int) and 1 <= n <= len(blocks):
-            b = blocks[n - 1]
-            citations.append({"doc_id": b["doc_id"], "page_no": b["page_no"],
-                              "chunk_id": b["hit_child_ids"][0] if b.get("hit_child_ids") else b["chunk_id"],
-                              "heading_path": b.get("heading_path"),
-                              "title": b.get("title") or b.get("filename")})
-    return {"answer": data.get("answer", "").strip(),
-            "has_answer": bool(data.get("has_answer", True)) and bool(citations),
+        b = blocks[n - 1]
+        citations.append({"source_no": n,
+                          "doc_id": b["doc_id"], "page_no": b["page_no"],
+                          "chunk_id": b["hit_child_ids"][0] if b.get("hit_child_ids") else b["chunk_id"],
+                          "heading_path": b.get("heading_path"),
+                          "title": b.get("title") or b.get("filename")})
+    return {"answer": answer,
+            "has_answer": bool(citations),
             "citations": citations}
 
 
 def _parse_json(raw: str) -> dict:
     raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1].lstrip("json").strip() if "```" in raw else raw
+    fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, flags=re.IGNORECASE)
+    if fenced:
+        raw = fenced.group(1).strip()
+    candidate = None
     try:
-        return json.loads(raw)
+        candidate = json.loads(raw)
     except Exception:
         i, j = raw.find("{"), raw.rfind("}")
         if i >= 0 and j > i:
             try:
-                return json.loads(raw[i:j + 1])
+                candidate = json.loads(raw[i:j + 1])
             except Exception:
-                return {"answer": raw, "used_sources": [], "has_answer": False}
-    return {"answer": raw, "used_sources": [], "has_answer": False}
+                candidate = None
+    try:
+        return RagModelPayload.model_validate(candidate).model_dump()
+    except Exception:
+        return RagModelPayload().model_dump()
 
 
 # ============================================================ 对外入口
@@ -202,10 +298,11 @@ def answer_question(user_id: int, question: str) -> dict:
                 "debug": {"reason": "no_recall"}}
     top, used_rr = rerank(question, children)
     top_score = top[0]["score_final"] if top else 0.0
-    # 最高重排分低于阈值 → 判无依据（仅在用了 reranker 时按绝对分判；降级时跳过该闸）
-    if used_rr and top_score < RERANK_SCORE_MIN:
+    evidence_ok, evidence_reason = evidence_is_sufficient(top, used_rr, question)
+    if not evidence_ok:
         return {"answer": NO_ANSWER, "citations": [], "has_answer": False,
-                "debug": {"reason": "low_score", "top_score": round(top_score, 3)}}
+                "debug": {"reason": evidence_reason, "top_score": round(top_score, 3),
+                          "reranker": used_rr}}
     blocks = merge_parents(top)
     result = generate(question, blocks)
     result["debug"] = {"recall": len(children), "reranked": len(top),

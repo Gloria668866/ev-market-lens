@@ -12,7 +12,7 @@ function localQuery({ q = '', brand = '', sort = 'price', order = 'desc', limit 
     const r = key === 'max' ? (a.max || 0) - (b.max || 0) : String(a[key]).localeCompare(String(b[key]), 'zh')
     return order === 'asc' ? r : -r
   })
-  return { count: items.length, items: items.slice(0, limit) }
+  return { count: items.length, returned: Math.min(items.length, limit), items: items.slice(0, limit) }
 }
 
 export async function listPrices(params = {}) {

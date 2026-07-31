@@ -1,0 +1,11 @@
+{
+  "n": 54,
+  "context_recall": 0.8295454545454546,
+  "context_precision": 0.15852272727272726,
+  "mrr": 0.7594696969696969,
+  "recall_single": 0.8157894736842105,
+  "recall_cross": 0.9166666666666666,
+  "faithfulness": 0.7045454545454546,
+  "answer_correctness": 0.7954545454545454,
+  "abstain_rate": 1.0
+}

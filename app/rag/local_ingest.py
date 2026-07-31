@@ -74,10 +74,18 @@ def parse_blocks(data, file_type: str, filename: str):
     return _parse_text(text, title)   # txt / html(粗) 等
 
 
-def ingest_bytes(user_id, filename, data, file_type, title=None, public=False):
+def ingest_bytes(
+    user_id, filename, data, file_type, title=None, public=False, source_uri=None
+):
     """同步入库一份文档，返回 (doc_id, chunk_count)。public=True → user_id 存 NULL（公共种子库）。"""
     owner = None if public else user_id
-    doc_id = store.create_document(owner, filename, file_type, title=title or filename)
+    doc_id = store.create_document(
+        owner,
+        filename,
+        file_type,
+        source_uri=source_uri,
+        title=title or filename,
+    )
     try:
         blocks = parse_blocks(data, file_type, filename)
         chunks = build_chunks(blocks, count_tokens=embed.count_tokens)

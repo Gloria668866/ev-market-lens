@@ -1,4 +1,4 @@
-// SSE 事件解码（PRD-2 §9.1 标准协议）
+// SSE 事件解码（见 docs/technical-design.md 第 9 节）
 // ------------------------------------------------------------------
 // 后端已对齐 §9.1（2026-05-25，后端⑤），故这里**不再做「两种形态都吃」的归一化兼容层**，
 // 直接按标准事件名/JSON 结构解码成「组件用的规范事件」：
@@ -57,6 +57,9 @@ export function normalizeEvent(event, raw) {
     case 'citation':
       // 后端逐条推：一个事件 = 一条引用对象
       return { type: 'citation', citation: o }
+
+    case 'collection':
+      return { type: 'collection', taskId: o.task_id || '', status: o.status || 'queued' }
 
     case 'done':
       return { type: 'done', msgId: o.msg_id ?? null, conversationId: o.conversation_id ?? null, hasAnswer: o.has_answer ?? true }

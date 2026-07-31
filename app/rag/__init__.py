@@ -1,4 +1,4 @@
-"""RAG 离线入库管线（PRD-2 §5）：文档 → MinIO → 解析 → 父子分块 → BGE 向量化 → pgvector。
+"""RAG 离线入库管线：文档 → 解析 → 父子分块 → BGE → 本地/PG 存储。
 
 模块划分：
   store.py   对象存储（MinIO）：原始文件 put/get

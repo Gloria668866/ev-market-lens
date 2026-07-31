@@ -15,7 +15,11 @@ import threading
 
 import numpy as np
 
-from ..config import LOCAL_KB_PATH
+from ..config import (
+    EMBED_DIM,
+    EMBED_MODEL_VERSION,
+    LOCAL_KB_PATH,
+)
 from .text import tokens_for_index, query_terms
 
 _lock = threading.Lock()
@@ -67,6 +71,8 @@ def init_store():
                     content TEXT,
                     content_embed TEXT,
                     embedding BLOB,                   -- float32 bytes（仅子块）
+                    embedding_model_version TEXT,
+                    embedding_dim INTEGER,
                     page_no INTEGER,
                     token_count INTEGER,
                     content_tokens TEXT
@@ -76,6 +82,21 @@ def init_store():
                 CREATE INDEX IF NOT EXISTS idx_kbd_user ON kb_document(user_id);
                 """
             )
+            # Existing SQLite files predate vector lineage.  ALTER is
+            # intentionally idempotent and preserves every document/chunk.
+            columns = {
+                row["name"]
+                for row in c.execute("PRAGMA table_info(kb_chunk)").fetchall()
+            }
+            if "embedding_model_version" not in columns:
+                c.execute(
+                    "ALTER TABLE kb_chunk "
+                    "ADD COLUMN embedding_model_version TEXT"
+                )
+            if "embedding_dim" not in columns:
+                c.execute(
+                    "ALTER TABLE kb_chunk ADD COLUMN embedding_dim INTEGER"
+                )
             c.commit()
         _inited = True
 
@@ -137,10 +158,33 @@ def list_documents(user_id):
     init_store()
     with _conn() as c:
         rows = c.execute(
-            "SELECT id,filename,status,file_type,chunk_count,created_at FROM kb_document "
+            "SELECT id,user_id,filename,status,file_type,source_uri,title,chunk_count,created_at "
+            "FROM kb_document "
             "WHERE deleted_at IS NULL AND (user_id IS NULL OR user_id=?) ORDER BY user_id IS NULL DESC, created_at DESC",
             (user_id,)).fetchall()
     return [dict(r) for r in rows]
+
+
+def purge_user_documents(user_id: int) -> int:
+    """Hard-delete all private local documents and chunks for one deleted user."""
+    init_store()
+    with _conn() as c:
+        doc_ids = [
+            row[0]
+            for row in c.execute(
+                "SELECT id FROM kb_document WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        ]
+        if doc_ids:
+            placeholders = ",".join("?" * len(doc_ids))
+            c.execute(
+                f"DELETE FROM kb_chunk WHERE doc_id IN ({placeholders})",
+                doc_ids,
+            )
+        c.execute("DELETE FROM kb_document WHERE user_id=?", (user_id,))
+        c.commit()
+    return len(doc_ids)
 
 
 # ---------------------------------------------------------------- kb_chunk
@@ -153,14 +197,29 @@ def insert_chunks(doc_id, user_id, chunks, embeddings_by_index):
         for ch in chunks:
             parent_id = idx_to_id.get(ch["parent_ref"]) if ch["parent_ref"] is not None else None
             vec = embeddings_by_index.get(ch["chunk_index"])
-            emb_blob = np.asarray(vec, dtype=np.float32).tobytes() if vec is not None else None
+            if vec is None:
+                emb_blob = None
+                embedding_version = None
+                embedding_dim = None
+            else:
+                array = np.asarray(vec, dtype=np.float32)
+                if array.shape != (EMBED_DIM,):
+                    raise ValueError(
+                        f"chunk {ch['chunk_index']} vector shape {array.shape}, "
+                        f"expected {(EMBED_DIM,)}"
+                    )
+                emb_blob = array.tobytes()
+                embedding_version = EMBED_MODEL_VERSION
+                embedding_dim = EMBED_DIM
             cur = c.execute(
                 "INSERT INTO kb_chunk(doc_id,user_id,chunk_index,level,parent_chunk_id,is_retrievable,"
-                "chunk_type,heading_path,content,content_embed,embedding,page_no,token_count,content_tokens) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "chunk_type,heading_path,content,content_embed,embedding,embedding_model_version,"
+                "embedding_dim,page_no,token_count,content_tokens) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (doc_id, user_id, ch["chunk_index"], ch["level"], parent_id,
                  1 if ch["is_retrievable"] else 0, ch["chunk_type"], ch["heading_path"],
-                 ch["content"], ch["content_embed"], emb_blob, ch["page_no"], ch["token_count"],
+                 ch["content"], ch["content_embed"], emb_blob, embedding_version,
+                 embedding_dim, ch["page_no"], ch["token_count"],
                  tokens_for_index(ch["content"])))
             idx_to_id[ch["chunk_index"]] = cur.lastrowid
             n += 1
@@ -171,13 +230,27 @@ def insert_chunks(doc_id, user_id, chunks, embeddings_by_index):
 _HIT_KEYS = ["chunk_id", "parent_chunk_id", "doc_id", "heading_path", "content", "page_no", "score"]
 
 
-def _retrievable_rows(c, user_id):
+def _retrievable_rows(c, user_id, *, compatible_vectors_only: bool = False):
     """取所有可检索子块（我的 + 公共，未软删）。"""
+    compatibility = ""
+    params = [user_id]
+    if compatible_vectors_only:
+        compatibility = (
+            " AND k.embedding IS NOT NULL "
+            "AND k.embedding_model_version=? AND k.embedding_dim=? "
+            "AND length(k.embedding)=?"
+        )
+        params.extend([
+            EMBED_MODEL_VERSION,
+            EMBED_DIM,
+            EMBED_DIM * np.dtype(np.float32).itemsize,
+        ])
     return c.execute(
         "SELECT k.chunk_id,k.parent_chunk_id,k.doc_id,k.heading_path,k.content,k.page_no,"
         "k.embedding,k.content_tokens FROM kb_chunk k JOIN kb_document d ON k.doc_id=d.id "
-        "WHERE k.is_retrievable=1 AND d.deleted_at IS NULL AND (k.user_id IS NULL OR k.user_id=?)",
-        (user_id,)).fetchall()
+        "WHERE k.is_retrievable=1 AND d.deleted_at IS NULL "
+        f"AND (k.user_id IS NULL OR k.user_id=?){compatibility}",
+        tuple(params)).fetchall()
 
 
 def search(user_id, query_vec, top_k=20):
@@ -186,8 +259,12 @@ def search(user_id, query_vec, top_k=20):
     if query_vec is None:          # 无向量模型 → 跳过向量召回（走纯词法）
         return []
     qv = np.asarray(query_vec, dtype=np.float32)
+    if qv.shape != (EMBED_DIM,):
+        raise ValueError(
+            f"query vector shape {qv.shape}, expected {(EMBED_DIM,)}"
+        )
     with _conn() as c:
-        rows = [r for r in _retrievable_rows(c, user_id) if r["embedding"] is not None]
+        rows = _retrievable_rows(c, user_id, compatible_vectors_only=True)
     if not rows:
         return []
     mat = np.stack([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
@@ -260,9 +337,61 @@ def get_chunks(chunk_ids):
 
 
 def stats():
-    """(docs, chunks) 计数，给 build 脚本/自检用。"""
+    """Return active document/chunk counts for build output and health checks."""
     init_store()
     with _conn() as c:
         d = c.execute("SELECT COUNT(*) FROM kb_document WHERE deleted_at IS NULL").fetchone()[0]
-        k = c.execute("SELECT COUNT(*) FROM kb_chunk").fetchone()[0]
+        k = c.execute(
+            "SELECT COUNT(*) FROM kb_chunk k JOIN kb_document d ON d.id=k.doc_id "
+            "WHERE d.deleted_at IS NULL"
+        ).fetchone()[0]
     return d, k
+
+
+def embedding_compatibility_stats() -> dict:
+    """Describe active child vectors without trusting unversioned legacy rows."""
+    init_store()
+    expected_bytes = EMBED_DIM * np.dtype(np.float32).itemsize
+    with _conn() as c:
+        row = c.execute(
+            """
+            SELECT
+              COUNT(*) AS retrievable,
+              SUM(CASE WHEN k.embedding IS NULL THEN 1 ELSE 0 END) AS missing,
+              SUM(CASE WHEN k.embedding IS NOT NULL
+                        AND (
+                          k.embedding_model_version IS NULL
+                          OR k.embedding_dim IS NULL
+                        )
+                       THEN 1 ELSE 0 END) AS legacy,
+              SUM(CASE WHEN k.embedding IS NOT NULL
+                        AND k.embedding_model_version=?
+                        AND k.embedding_dim=?
+                        AND length(k.embedding)=?
+                       THEN 1 ELSE 0 END) AS compatible,
+              SUM(CASE WHEN k.embedding IS NOT NULL
+                        AND k.embedding_model_version IS NOT NULL
+                        AND k.embedding_dim IS NOT NULL
+                        AND (
+                          k.embedding_model_version<>?
+                          OR k.embedding_dim<>?
+                          OR length(k.embedding)<>?
+                        )
+                       THEN 1 ELSE 0 END) AS mismatched
+            FROM kb_chunk k
+            JOIN kb_document d ON d.id=k.doc_id
+            WHERE d.deleted_at IS NULL AND k.is_retrievable=1
+            """,
+            (
+                EMBED_MODEL_VERSION,
+                EMBED_DIM,
+                expected_bytes,
+                EMBED_MODEL_VERSION,
+                EMBED_DIM,
+                expected_bytes,
+            ),
+        ).fetchone()
+    return {
+        key: int(row[key] or 0)
+        for key in ("retrievable", "compatible", "legacy", "mismatched", "missing")
+    }

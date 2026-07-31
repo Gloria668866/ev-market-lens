@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph ING["知识入库"]
+        D1["用户上传或审核通过的研究结果"] --> OWN["确定归属<br/>公共文档或当前用户私有文档"]
+        OWN --> STORE{"RAG_BACKEND"}
+        STORE -->|"local：同步"| LP["lite parser"]
+        STORE -->|"pg：原文先存 MinIO，Celery 异步"| PP["lite parser"]
+        LP --> CHUNK["结构感知父子分块"]
+        PP --> CHUNK
+        CHUNK --> EMB["仅对子块做 BGE-large-zh embedding<br/>父块保留完整生成上下文"]
+        EMB --> LS[("本地 SQLite + numpy")]
+        EMB --> PS[("生产 PostgreSQL + pgvector")]
+    end
+    subgraph QRY["在线检索问答"]
+        Q1["用户提问 + user_id"] --> FILTER["检索前租户过滤<br/>公共文档 + 当前用户私有文档"]
+        FILTER --> VEC["BGE 向量召回"]
+        FILTER --> KW["jieba 关键词召回"]
+        VEC --> RRF["RRF 按名次融合"]
+        KW --> RRF
+        RRF --> HASRR{"reranker 可用？"}
+        HASRR -->|"是"| RE["BGE reranker 重排"]
+        HASRR -->|"否"| STRICT["按 RRF 排序<br/>要求向量+关键词双路命中"]
+        RE --> GATE{"证据充分？"}
+        STRICT --> GATE
+        GATE -->|"否"| NO["拒答并建议上传资料"]
+        GATE -->|"是"| PARENT["命中子块换回父块<br/>去重、相邻合并、预算裁剪"]
+        PARENT --> GEN["LLM 仅依据上下文生成"]
+        GEN --> CITE["答案 + 文档/章节/页码引用"]
+    end
+    LS -. "检索" .-> FILTER
+    PS -. "检索" .-> FILTER
+    NOTE["当前 PARSER_BACKEND=lite；MinerU 仅预留，未实现"]
+    NOTE -.-> LP
+    classDef i fill:#E6F4EA,stroke:#34A853,color:#000;
+    classDef q fill:#FEF7E0,stroke:#F9AB00,color:#000;
+    class D1,OWN,STORE,LP,PP,CHUNK,EMB,LS,PS i; class Q1,FILTER,VEC,KW,RRF,RE,GATE,PARENT,GEN,CITE,NO q;

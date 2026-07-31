@@ -36,6 +36,20 @@ def test_gold_sql_all_executable(gold_data):
 
 
 @pytest.mark.integration
+def test_gold_sql_all_nonempty(gold_data):
+    """Both-empty must never inflate EX accuracy for an invalid evaluation item."""
+    from app.db import run_query
+    from app.sql_guard import ensure_safe, with_limit
+
+    empty = []
+    for it in gold_data:
+        _, rows = run_query(with_limit(ensure_safe(it["gold_sql"])))
+        if not rows:
+            empty.append(it["id"])
+    assert empty == [], f"Gold SQL returned no rows: {empty}"
+
+
+@pytest.mark.integration
 def test_gold_sql_no_direct_date_id_yyyymm(gold_data):
     import re
     bad = []

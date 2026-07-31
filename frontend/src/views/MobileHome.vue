@@ -9,9 +9,9 @@ const HOT = [
   { q: '2025年新上榜车型有哪些', icon: '🆕' },
 ]
 const KPIS = [
-  { label: '覆盖车系', value: '409' },
+  { label: '覆盖车系', value: '433' },
   { label: '覆盖品牌', value: '101' },
-  { label: '数据总量', value: '8,072' },
+  { label: '数据总量', value: '8,402' },
 ]
 </script>
 

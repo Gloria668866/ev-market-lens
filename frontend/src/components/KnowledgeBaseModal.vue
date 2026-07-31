@@ -110,6 +110,7 @@ async function remove(d) {
           <div class="dmeta">
             <span class="dtitle">{{ d.title }}</span>
             <span class="dinfo">
+              <template v-if="d.isPublic">公共底座 · </template>
               <template v-if="d.status === 'ready'">{{ d.chunkCount }} 切片</template>
               <template v-else-if="d.status === 'parsing'">解析中，请稍候…</template>
               <template v-else>无法解析，可删除后重传</template>
@@ -119,7 +120,7 @@ async function remove(d) {
           <span class="dstatus" :class="STATUS[d.status]?.[1]">
             <span v-if="d.status === 'parsing'" class="dot"></span>{{ STATUS[d.status]?.[0] || d.status }}
           </span>
-          <button class="del" title="删除文档" @click="remove(d)">✕</button>
+          <button v-if="!d.isPublic" class="del" title="删除文档" @click="remove(d)">✕</button>
         </div>
       </div>
     </div>

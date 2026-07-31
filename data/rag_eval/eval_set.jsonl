@@ -1,0 +1,54 @@
+{"qid": "q1", "type": "single", "source": "koubei", "question": "新款东风风神E70所搭载电动机的总功率是多少？", "ground_truth": "110kW", "gt_doc_id": 167, "gt_parent_ids": [3350]}
+{"qid": "q2", "type": "single", "source": "koubei", "question": "ID.4 CROZZ纯享版在北方冬季使用时，车主抱怨缺少了哪些舒适与便利配置？", "ground_truth": "缺少座椅加热、方向盘加热、热泵空调、电尾门和后视镜折叠功能。", "gt_doc_id": 331, "gt_parent_ids": [15403]}
+{"qid": "q3", "type": "single", "source": "koubei", "question": "这位传祺向往S7车主为什么建议购买顶配车型？", "ground_truth": "因为顶配车型配置丰富，想要的都能给到。", "gt_doc_id": 199, "gt_parent_ids": [5414]}
+{"qid": "q4", "type": "single", "source": "koubei", "question": "车主购买的海狮06 Pro版裸车价是多少？", "ground_truth": "144800元", "gt_doc_id": 232, "gt_parent_ids": [7558]}
+{"qid": "q5", "type": "single", "source": "koubei", "question": "坦克700的转向灯拨杆与普通车辆有何不同，使用时容易出现什么问题？", "ground_truth": "有两种动作（拨动和轻弹），不熟悉会来回变灯，且力度不易掌握，不是每次都成功。", "gt_doc_id": 512, "gt_parent_ids": [28261]}
+{"qid": "q6", "type": "single", "source": "koubei", "question": "艾睿雅在雨天行驶时，雨刮器存在哪些问题？", "ground_truth": "刮玻璃时会发出很难听的声音，下小雨时刮得很快，下大雨时刮得很慢。", "gt_doc_id": 401, "gt_parent_ids": [21077]}
+{"qid": "q7", "type": "single", "source": "koubei", "question": "起亚EV5基于什么平台打造？", "ground_truth": "E-GMP平台", "gt_doc_id": 493, "gt_parent_ids": [26926]}
+{"qid": "q8", "type": "single", "source": "koubei", "question": "智己LS9的第三排座椅靠背最大后仰角度是多少？", "ground_truth": "130度", "gt_doc_id": 259, "gt_parent_ids": [10003]}
+{"qid": "q9", "type": "single", "source": "koubei", "question": "焕新001车内NFC功能给车主带来了什么不便？", "ground_truth": "无法常驻关闭，每次上车需手动关闭，否则无线充电时会触发NFC，比较烦人。", "gt_doc_id": 357, "gt_parent_ids": [17811]}
+{"qid": "q10", "type": "single", "source": "koubei", "question": "根据五菱星光S车主的经验，雪天行车时应遵循的八字口诀是什么？", "ground_truth": "怂能保命，慢即是快。", "gt_doc_id": 147, "gt_parent_ids": [1848]}
+{"qid": "q11", "type": "single", "source": "koubei", "question": "这位极氪MIX车主的孩子最喜欢什么颜色？", "ground_truth": "绿色", "gt_doc_id": 536, "gt_parent_ids": [29643]}
+{"qid": "q12", "type": "single", "source": "koubei", "question": "一位逸动EV车主认为车身外观哪个部分的设计很好看？", "ground_truth": "前脸的大灯", "gt_doc_id": 165, "gt_parent_ids": [3173]}
+{"qid": "q13", "type": "single", "source": "koubei", "question": "试驾者在城市路口使用智能辅助驾驶时，临近停止线且信号灯还有13秒变红灯，车辆的行驶状态出现了什么异常？", "ground_truth": "行驶状态是加速减速，加速减速，到路口还有5秒刹停", "gt_doc_id": 197, "gt_parent_ids": [5281]}
+{"qid": "q14", "type": "single", "source": "koubei", "question": "根据车主反馈，荣威iMAX8 EV在夏季开启冷气、动能回收调到最高的情况下，在上海城市路况的实际续航大约是多少？", "ground_truth": "300km不到", "gt_doc_id": 389, "gt_parent_ids": [20175]}
+{"qid": "q15", "type": "single", "source": "koubei", "question": "风云T11在未开音乐的情况下，大约多少车速才开始能听到风噪？", "ground_truth": "约88km/h", "gt_doc_id": 509, "gt_parent_ids": [27842]}
+{"qid": "q16", "type": "single", "source": "koubei", "question": "零跑Lafa5在时速70公里以上时，舒适模式和标准模式的提速感受有何差异？", "ground_truth": "标准模式提速明显更有力，舒适模式相对稍弱。", "gt_doc_id": 269, "gt_parent_ids": [10605]}
+{"qid": "q17", "type": "single", "source": "cpca", "question": "启境GT7计划在哪个月份上市？", "ground_truth": "6月", "gt_doc_id": 115, "gt_parent_ids": [1286]}
+{"qid": "q18", "type": "single", "source": "cpca", "question": "在华为智擎与华为超充战略新品发布会上，乘用车端推出的民用兆瓦超充桩的功率是多少？", "ground_truth": "1000千瓦（1MW）", "gt_doc_id": 108, "gt_parent_ids": [1257]}
+{"qid": "q19", "type": "single", "source": "cpca", "question": "比亚迪与神州租车在哪个城市签署了战略合作暨采购框架协议？", "ground_truth": "深圳", "gt_doc_id": 126, "gt_parent_ids": [1335]}
+{"qid": "q20", "type": "single", "source": "cpca", "question": "截至2026年4月底，我国电动汽车充电基础设施（枪）总数达到多少万个？", "ground_truth": "2195.5万个", "gt_doc_id": 139, "gt_parent_ids": [1392]}
+{"qid": "q21", "type": "single", "source": "cpca", "question": "长安汽车“1445”战略中，到2030年的营业收入目标是多少？", "ground_truth": "6000亿元", "gt_doc_id": 106, "gt_parent_ids": [1248]}
+{"qid": "q22", "type": "single", "source": "cpca", "question": "截至2026年4月，特斯拉在中国内地对非特斯拉品牌车辆开放的超级充电站大约有多少座？", "ground_truth": "1000多座", "gt_doc_id": 120, "gt_parent_ids": [1310]}
+{"qid": "q23", "type": "single", "source": "cpca", "question": "维智捷的股票代码是什么？", "ground_truth": "VGNT", "gt_doc_id": 129, "gt_parent_ids": [1349]}
+{"qid": "q24", "type": "single", "source": "cpca", "question": "截至2026年5月12日，东风香港通过二级市场累计增持了岚图汽车多少股H股？", "ground_truth": "20,192,000股", "gt_doc_id": 130, "gt_parent_ids": [1354]}
+{"qid": "q25", "type": "single", "source": "cpca", "question": "在《广东省国民经济和社会发展第十五个五年规划纲要》中，为了加快发展智能网联汽车，广东计划建设哪两类设施？", "ground_truth": "智能网联汽车测试区和车路协同设施。", "gt_doc_id": 112, "gt_parent_ids": [1273]}
+{"qid": "q26", "type": "single", "source": "cpca", "question": "根据吉利公布的计划，其位于法国的销售网点将于2028年达到多少家？", "ground_truth": "170家", "gt_doc_id": 119, "gt_parent_ids": [1305]}
+{"qid": "q27", "type": "single", "source": "cpca", "question": "长安汽车BlueCore混动系统采用的超高压燃油喷射技术，其燃油喷射压力是多少？", "ground_truth": "350巴", "gt_doc_id": 109, "gt_parent_ids": [1261]}
+{"qid": "q28", "type": "single", "source": "cpca", "question": "截至2026年3月底，我国私人充电设施的数量是多少万个？", "ground_truth": "1661.8万个", "gt_doc_id": 110, "gt_parent_ids": [1265]}
+{"qid": "q29", "type": "single", "source": "cpca", "question": "2026年“五一”假期，交通运输部要求以什么方式做好拥堵路段的疏堵保畅工作？", "ground_truth": "一段一策", "gt_doc_id": 114, "gt_parent_ids": [1282]}
+{"qid": "q30", "type": "single", "source": "cpca", "question": "工业和信息化部节能与综合利用司负责人带队赴哪些城市调研新能源汽车动力电池回收利用？", "ground_truth": "广东省广州市、深圳市", "gt_doc_id": 131, "gt_parent_ids": [1358]}
+{"qid": "q31", "type": "single", "source": "cpca", "question": "新编制的“两区”负面清单涉及了哪四个领域？", "ground_truth": "医疗器械、自动驾驶（智能网联汽车）、贸易物流、银行业。", "gt_doc_id": 125, "gt_parent_ids": [1330]}
+{"qid": "q32", "type": "single", "source": "cpca", "question": "2026年6月1日起实施的疲劳驾驶新规中，认定疲劳驾驶时采用的三维立体体系由哪三个维度组成？", "ground_truth": "驾驶行为、生理状态、生活轨迹", "gt_doc_id": 137, "gt_parent_ids": [1383]}
+{"qid": "q33", "type": "single", "source": "cpca", "question": "2025年4月22日广东省发布的行动方案中，在智能网联汽车领域拟推动哪种级别的自动驾驶车型准入和上路通行试点？", "ground_truth": "L3级", "gt_doc_id": 107, "gt_parent_ids": [1253]}
+{"qid": "q34", "type": "single", "source": "cpca", "question": "“手机+”无卡便捷通行模式下，车主绑定车牌和支付账户后获得的通行权限有效期是多长时间？", "ground_truth": "30天", "gt_doc_id": 116, "gt_parent_ids": [1292]}
+{"qid": "q35", "type": "single", "source": "pdf", "question": "理想、蔚来、小米等品牌在中国新能源汽车市场中属于哪个品牌阵营？", "ground_truth": "新势力", "gt_doc_id": 104, "gt_parent_ids": [1219]}
+{"qid": "q36", "type": "single", "source": "pdf", "question": "2025年中国新能源汽车市场中，走量主力车型主要聚集在哪个价格区间？", "ground_truth": "10-20万元区间", "gt_doc_id": 104, "gt_parent_ids": [1223]}
+{"qid": "q37", "type": "single", "source": "pdf", "question": "理想L6采用哪种动力类型？", "ground_truth": "增程", "gt_doc_id": 104, "gt_parent_ids": [1213]}
+{"qid": "q38", "type": "single", "source": "pdf", "question": "2025年中国新能源汽车市场中，主流纯电车型的续航里程一般能达到什么范围？", "ground_truth": "600-800公里", "gt_doc_id": 104, "gt_parent_ids": [1228]}
+{"qid": "q39", "type": "cross", "source": "pdf", "question": "在用户对新能源车续航达成率关注度上升的背景下，充电基础设施的大幅增长如何影响用户的实际使用体验？", "ground_truth": "充电基础设施的显著增长能直接缓解因续航达成率不足带来的补能焦虑，使得用户在续航表现未完全满足预期时仍能便捷充电，从而保障整体用车体验；同时，结合直营与商超店模式触达用户，优化后的售后体验与充电便利性共同支撑了较高的口碑评分。", "gt_doc_id": 104, "gt_parent_ids": [1233, 1236]}
+{"qid": "q40", "type": "cross", "source": "pdf", "question": "资料一中提到的报告基于什么数据整理？根据该报告，2025年新能源乘用车销量最高的纯电车型是哪款？其年销量是多少？", "ground_truth": "报告基于懂车帝公开销量榜与口碑数据整理；2025年销量最高的纯电车型是星愿，年销量为465,775辆。", "gt_doc_id": 104, "gt_parent_ids": [1210, 1213]}
+{"qid": "q41", "type": "cross", "source": "pdf", "question": "根据资料，该研究报告的数据来源和目的是什么？在2025年销量前四的车系中，增程式动力的车系名称及年销量是多少？", "ground_truth": "数据来源是懂车帝公开销量榜与口碑数据，目的是供行业研究参考。增程式动力车系是理想L6，年销量为387,948辆。", "gt_doc_id": 104, "gt_parent_ids": [1210, 1213]}
+{"qid": "q42", "type": "cross", "source": "pdf", "question": "新能源汽车用户口碑中，为何在续航达成率与售后体验关注度上升的情况下，总体口碑仍能保持 4.0 分以上？请综合两段资料分析。", "ground_truth": "一方面，用户在外观、空间、智能化等方面给予较高评价，这些优势项目拉高了整体口碑分数；另一方面，国家延续购置税减免、实施双积分政策、各地方提供补贴与牌照优惠，叠加充电基础设施建设持续加码、充电桩规模大幅增长，有效缓解了补能焦虑，部分抵消了续航达成率与售后体验的不足，使口碑仍维持在较高水平。", "gt_doc_id": 104, "gt_parent_ids": [1233, 1236]}
+{"qid": "q43", "type": "cross", "source": "pdf", "question": "在10-20万元的价格区间中，主要由哪个品牌阵营主导？请结合资料说明其代表车系与品牌特征。", "ground_truth": "该区间主要由传统自主品牌主导。代表车系为秦PLUS、元UP，均来自比亚迪（传统自主品牌），此类品牌具备规模与供应链优势。", "gt_doc_id": 104, "gt_parent_ids": [1219, 1223]}
+{"qid": "q44", "type": "cross", "source": "pdf", "question": "2025年新能源乘用车年销量前四的车系中，哪些属于新势力品牌？它们各自的动力类型是什么？", "ground_truth": "小米SU7（纯电）和理想L6（增程）属于新势力品牌。", "gt_doc_id": 104, "gt_parent_ids": [1213, 1219]}
+{"qid": "q45", "type": "negative", "source": "none", "question": "公司2024年第三季度的食堂菜单是什么？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q46", "type": "negative", "source": "none", "question": "请问员工年度体检安排在几月？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q47", "type": "negative", "source": "none", "question": "iPhone 16 Pro 的电池容量是多少毫安？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q48", "type": "negative", "source": "none", "question": "这份报告里推荐买哪只股票？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q49", "type": "negative", "source": "none", "question": "北京明天的天气怎么样？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q50", "type": "negative", "source": "none", "question": "如何注册一家有限责任公司？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q51", "type": "negative", "source": "none", "question": "鲲鹏牌洗衣机的功率是多少瓦？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q52", "type": "negative", "source": "none", "question": "本田思域燃油版的保养周期是多久？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q53", "type": "negative", "source": "none", "question": "员工餐厅周五供应什么汤？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}
+{"qid": "q54", "type": "negative", "source": "none", "question": "公司年会在哪个酒店举办？", "ground_truth": "（知识库中无相关内容，应回答未找到依据）", "gt_doc_id": null, "gt_parent_ids": []}

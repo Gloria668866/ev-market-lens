@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 .venv-scrapling/
+.pytest_cache/
 
 # ===== 密钥 / 环境（绝不入库）=====
 .env
@@ -20,7 +21,8 @@ venv/
 bi_demo.db
 
 # ===== 爬取的原始数据（用 data/crawl_sales.py / crawl_koubei.py 可重新生成，体积大）=====
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
 
 # ===== RAG 语料候选（用 data/export_rag_corpus.py 可重新生成，体积大）=====
 data/rag_corpus/
@@ -37,6 +39,10 @@ data/probe/*.txt
 # ===== Node（docx 生成用全局安装的 docx）=====
 node_modules/
 
+# ===== 前端构建产物 =====
+frontend/dist/
+phone/dist/
+
 # ===== 渲染中间产物 =====
 *.pdf
 .diagrams_tmp/
@@ -47,6 +53,14 @@ eval/reports/_*.log
 # ===== Agent 运行状态（oh-my-commit 等工具生成）=====
 .omc/
 **/.omc/
+.tmp/
+/tmp/
+/.local-notes/
+.agents/
+.codex/
+.reasonix/
+.claude/settings.local.json
+*.patch
 
 # ===== 系统 / IDE =====
 .DS_Store

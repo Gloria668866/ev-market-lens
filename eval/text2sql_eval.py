@@ -23,12 +23,19 @@ except Exception:
     pass
 
 from eval.common import load_jsonl, result_set_equal, pct  # noqa: E402
-from app.text2sql import SYS, DOMAIN, FEWSHOT, _extract_sql  # noqa: E402
+from app.text2sql import (  # noqa: E402
+    SYS,
+    DOMAIN,
+    FEWSHOT,
+    _brand_entity_hint,
+    _extract_sql,
+)
 from app.schema_linking import link_schema                  # noqa: E402
 from app.sql_guard import ensure_safe, with_limit, UnsafeSQLError  # noqa: E402
 from app.db import run_query                                # noqa: E402
 from app.llm import chat                                    # noqa: E402
 from app.config import MAX_SQL_RETRY                        # noqa: E402
+from app.graph import _validate_sql_shape                   # noqa: E402
 
 DATASET = os.path.join(ROOT, "eval", "datasets", "text2sql.jsonl")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
@@ -44,14 +51,26 @@ def gen_and_run(question, max_retry):
     result = {sql, rows, attempts, exec_ok, error}。first=第一次，final=执行成功或耗尽。"""
     schema = link_schema(question)
     msgs = [{"role": "system", "content": SYS},
-            {"role": "user", "content": f"{DOMAIN}\n\n{FEWSHOT}\n可用表结构:\n{schema}\n\nQ: {question}\nSQL:"}]
+            {"role": "user", "content": (
+                f"{DOMAIN}\n\n{_brand_entity_hint(question)}{FEWSHOT}\n"
+                f"可用表结构:\n{schema}\n\nQ: {question}\nSQL:"
+            )}]
     first = None
     res = None
     for attempt in range(max_retry + 1):
         sql = _extract_sql(chat(msgs, temperature=0.0))
         try:
             (cols, rows), safe = _exec(sql)
-            res = {"sql": safe, "rows": rows, "attempts": attempt + 1, "exec_ok": True, "error": None}
+            shape_ok, shape_reason = _validate_sql_shape(
+                question, safe, cols, rows
+            )
+            res = {
+                "sql": safe,
+                "rows": rows,
+                "attempts": attempt + 1,
+                "exec_ok": shape_ok,
+                "error": None if shape_ok else f"语义结构不匹配：{shape_reason}",
+            }
         except (UnsafeSQLError, Exception) as e:  # noqa: BLE001
             res = {"sql": sql, "rows": [], "attempts": attempt + 1, "exec_ok": False, "error": str(e)[:160]}
         if attempt == 0:
@@ -59,7 +78,7 @@ def gen_and_run(question, max_retry):
         if res["exec_ok"]:
             return first, res
         msgs.append({"role": "assistant", "content": res["sql"]})
-        msgs.append({"role": "user", "content": f"上面的 SQL 执行报错：{res['error']}\n请修正后只输出一条 SELECT。"})
+        msgs.append({"role": "user", "content": f"上面的 SQL 执行或语义校验未通过：{res['error']}\n请修正后只输出一条 SELECT。"})
     return first, res
 
 
@@ -88,6 +107,10 @@ def run(limit=None, max_retry=MAX_SQL_RETRY):
     first_correct = final_correct = 0
     for i, it in enumerate(data, 1):
         gold_rows = run_query(with_limit(ensure_safe(it["gold_sql"])))[1]
+        if not gold_rows:
+            raise RuntimeError(
+                f"{it['id']} gold SQL returned no rows; fix the dataset before scoring"
+            )
         ordered = bool(it.get("ordered"))
         first, final = gen_and_run(it["q"], max_retry)
         fm = first["exec_ok"] and result_set_equal(gold_rows, first["rows"], ordered)
@@ -168,8 +191,8 @@ def main():
     ap.add_argument("--max-retry", type=int, default=MAX_SQL_RETRY)
     args = ap.parse_args()
     if args.check_gold:
-        check_gold()
-        return
+        bad = check_gold()
+        raise SystemExit(1 if bad else 0)
     print(f"== Text2SQL 评测（limit={args.limit or '全量'}, max_retry={args.max_retry}）==")
     r = run(args.limit, args.max_retry)
     os.makedirs(REPORT_DIR, exist_ok=True)

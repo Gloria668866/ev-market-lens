@@ -8,9 +8,12 @@
 用法：python eval/data_quality.py        产出 eval/reports/data_quality.json，全通过 exit 0、否则 exit 1。
 """
 import json
+import hashlib
 import os
 import sqlite3
+import subprocess
 import sys
+from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(ROOT, "bi_demo.db")
@@ -31,6 +34,19 @@ class Suite:
     def expect_row_count(self, table, n):
         got = self._scalar(f"SELECT COUNT(*) FROM {table}")
         self._add(f"{table} 行数 == {n}", got == n, f"实际 {got}")
+
+    def expect_min_row_count(self, table, n):
+        got = self._scalar(f"SELECT COUNT(*) FROM {table}")
+        self._add(f"{table} 行数 >= {n}", got >= n, f"实际 {got}")
+
+    def expect_same_row_count(self, left, right):
+        left_n = self._scalar(f"SELECT COUNT(*) FROM {left}")
+        right_n = self._scalar(f"SELECT COUNT(*) FROM {right}")
+        self._add(
+            f"{left} 与 {right} 行数一致",
+            left_n == right_n,
+            f"{left_n} vs {right_n}",
+        )
 
     def expect_not_null(self, table, col):
         bad = self._scalar(f"SELECT COUNT(*) FROM {table} WHERE {col} IS NULL")
@@ -63,10 +79,19 @@ class Suite:
 
 def build_suite(conn):
     s = Suite(conn)
-    # 行数（clean_load 落库后的真实基线）
-    for t, n in [("fact_sales_rank", 8072), ("fact_price", 8072), ("fact_review", 8072),
-                 ("dim_series", 409), ("dim_brand", 101), ("dim_date", 29)]:
-        s.expect_row_count(t, n)
+    # 数据每月都会增长，不能把某次快照的精确行数写成永久门槛。
+    # 这里守住合理下限与三张事实快照的一致性。
+    for table, minimum in (
+        ("fact_sales_rank", 5000),
+        ("fact_price", 5000),
+        ("fact_review", 5000),
+        ("dim_series", 300),
+        ("dim_brand", 50),
+        ("dim_date", 24),
+    ):
+        s.expect_min_row_count(table, minimum)
+    s.expect_same_row_count("fact_sales_rank", "fact_price")
+    s.expect_same_row_count("fact_sales_rank", "fact_review")
     # 非空
     s.expect_not_null("fact_sales_rank", "series_id")
     s.expect_not_null("fact_sales_rank", "date_id")
@@ -76,12 +101,53 @@ def build_suite(conn):
     s.expect_min("fact_sales_rank", "volume", 0)
     s.expect_min("fact_sales_rank", "rank", 1)
     s.expect_values_in_set("dim_series", "powertrain", ["纯电", "插混", "增程"])
-    s.expect_values_in_set("dim_date", "year", [2024, 2025, 2026])
+    s.expect_between("dim_date", "year", 2024, datetime.now().year)
     s.expect_between("fact_review", "score", 0, 5)     # 口碑评分范围（补采回填后已有值；DOMAIN 仍称恒NULL，建议后端更新）
     # 唯一性 + 外键
     s.expect_unique("fact_sales_rank", ["series_id", "date_id", "new_energy_type", "rank_type"])
     s.expect_fk("fact_sales_rank", "series_id", "dim_series", "series_id")
     s.expect_fk("fact_sales_rank", "date_id", "dim_date", "date_id")
+
+    # 日期覆盖应按自然月连续，且每个月都要有纯电/插混/增程三类分区。
+    min_date, max_date, date_count = conn.execute(
+        "SELECT MIN(date_id), MAX(date_id), COUNT(*) FROM dim_date"
+    ).fetchone()
+    if min_date and max_date:
+        min_index = (min_date // 100) * 12 + (min_date % 100)
+        max_index = (max_date // 100) * 12 + (max_date % 100)
+        expected_months = max_index - min_index + 1
+        s._add(
+            "dim_date 从最早到最新月份连续",
+            date_count == expected_months,
+            f"{min_date}~{max_date}：实际 {date_count} 月，应为 {expected_months} 月",
+        )
+    missing_energy = s._scalar(
+        "SELECT COUNT(*) FROM ("
+        "SELECT date_id FROM fact_sales_rank "
+        "GROUP BY date_id HAVING COUNT(DISTINCT new_energy_type) <> 3)"
+    )
+    s._add("每个月覆盖 3 种新能源类型", missing_energy == 0, f"{missing_energy} 个月缺分区")
+
+    # 防止把一个月的快照误复制到下个月（此前真实发生过的数据污染）。
+    latest_dates = [
+        row[0]
+        for row in conn.execute(
+            "SELECT date_id FROM dim_date ORDER BY date_id DESC LIMIT 2"
+        ).fetchall()
+    ]
+    if len(latest_dates) == 2:
+        snapshots = []
+        for date_id in latest_dates:
+            snapshots.append(set(conn.execute(
+                "SELECT series_id,new_energy_type,rank,volume "
+                "FROM fact_sales_rank WHERE date_id=?",
+                (date_id,),
+            ).fetchall()))
+        s._add(
+            "最近两个月销量快照不完全相同",
+            snapshots[0] != snapshots[1],
+            f"{latest_dates[1]} vs {latest_dates[0]}",
+        )
     return s.results
 
 
@@ -93,6 +159,31 @@ def run():
         conn.close()
 
 
+def _build_meta() -> dict:
+    meta = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database": os.path.basename(DB),
+    }
+    try:
+        meta["git_commit"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            text=True,
+        ).strip()
+        meta["dirty_worktree"] = bool(subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT,
+            text=True,
+        ).strip())
+    except Exception:
+        pass
+    raw_path = os.path.join(ROOT, "data", "raw", "sales_rank_raw.jsonl")
+    if os.path.exists(raw_path):
+        with open(raw_path, "rb") as stream:
+            meta["raw_sha256"] = hashlib.sha256(stream.read()).hexdigest()
+    return meta
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -101,8 +192,17 @@ def main():
     results = run()
     ok = sum(r["success"] for r in results)
     os.makedirs(REPORT_DIR, exist_ok=True)
+    # Capture provenance before opening the tracked report for writing.
+    # Opening with mode="w" truncates the file immediately and would otherwise
+    # make an initially clean evaluation checkout report itself as dirty.
+    payload = {
+        "total": len(results),
+        "passed": ok,
+        "results": results,
+        "_meta": _build_meta(),
+    }
     with open(os.path.join(REPORT_DIR, "data_quality.json"), "w", encoding="utf-8") as f:
-        json.dump({"total": len(results), "passed": ok, "results": results}, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"数据质量：{ok}/{len(results)} 通过")
     for r in results:
         if not r["success"]:

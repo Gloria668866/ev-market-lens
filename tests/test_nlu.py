@@ -3,6 +3,14 @@ import pytest
 from unittest.mock import patch
 
 
+@pytest.fixture(autouse=True)
+def _disable_real_few_shot_model_loading(monkeypatch):
+    """NLU unit tests must never load the heavyweight BGE model."""
+    from app import nlu
+
+    monkeypatch.setattr(nlu, "_few_shot_initialized", True)
+
+
 # ── Layer 1 ───────────────────────────────────────────────────────────────────
 
 def test_layer1_greeting_short():
@@ -17,6 +25,12 @@ def test_layer1_greeting_long_not_triggered():
     from app.nlu import layer1_prefilter
     result = layer1_prefilter("你好，比亚迪今年卖了多少", "")
     assert result is None
+
+
+def test_layer1_greeting_plus_business_entity_is_not_chat():
+    from app.nlu import layer1_prefilter
+
+    assert layer1_prefilter("你好比亚迪", "") is None
 
 
 def test_layer1_no_data_signal_sets_force_rag():
@@ -134,6 +148,34 @@ def test_layer2_classify_llm_error_returns_clarify(monkeypatch):
     monkeypatch.setattr(nlu, "_few_shot_examples", None)
     with patch("app.nlu.chat", side_effect=Exception("timeout")):
         result = nlu.layer2_classify("比亚迪销量", "")
+    assert result["intent"] == "clarify"
+    assert result["source"] == "layer2_fallback"
+
+
+def test_layer2_rejects_wrong_entity_types_in_model_json(monkeypatch):
+    from app import nlu
+
+    bad = (
+        '{"intent":"sql","confidence":0.95,"top2_intent":"rag",'
+        '"top2_confidence":0.05,"brands":"比亚迪","time":2025}'
+    )
+    with patch("app.nlu.chat", return_value=bad):
+        result = nlu.layer2_analyze("比亚迪2025年销量")
+
+    assert result["intent"] == "clarify"
+    assert result["source"] == "layer2_fallback"
+    assert result["brands"] == []
+
+
+def test_layer2_rejects_out_of_range_confidence(monkeypatch):
+    from app import nlu
+
+    with patch(
+        "app.nlu.chat",
+        return_value='{"intent":"sql","confidence":1.4,"top2_confidence":0}',
+    ):
+        result = nlu.layer2_analyze("比亚迪销量")
+
     assert result["intent"] == "clarify"
     assert result["source"] == "layer2_fallback"
 
@@ -264,4 +306,101 @@ def test_classify_chat_greeting_shortcircuits_before_llm(monkeypatch):
         result = nlu.classify("你好", last_assistant="")
     assert result["intent"] == "chat"
     assert result["confidence"] == 1.0
+    assert result["llm_calls"] == 0
+    assert result["nlu_latency_ms"] >= 0
     mock_chat.assert_not_called()
+
+
+def test_classify_deterministic_sql_uses_zero_nlu_model_calls():
+    from app import nlu
+
+    with patch("app.nlu.chat") as mock_chat:
+        result = nlu.classify("比亚迪2025年销量")
+
+    assert result["intent"] == "sql"
+    assert result["entities"]["brands"] == ["比亚迪"]
+    assert result["entities"]["time"] == ["2025年"]
+    assert result["llm_calls"] == 0
+    mock_chat.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("纯电中型SUV销量排名", "sql"),
+        ("Model Y销量如何，用户怎么评价", "hybrid"),
+        ("纯电车续航现在到什么水平，销量靠前的有哪些", "hybrid"),
+        ("理想全系销量多少，行业对增程怎么看", "hybrid"),
+        ("午饭吃什么", "chat"),
+        ("谢谢你的帮助", "chat"),
+        ("给我讲个笑话", "chat"),
+        ("你能做什么", "chat"),
+        ("理想i8的内饰做工怎么样", "rag"),
+        ("小米YU7的能耗表现如何", "rag"),
+        ("蔚来的充换电网络建设到什么规模了", "rag"),
+        ("华为在汽车领域有哪些新动作", "rag"),
+        ("哪个车好", "clarify"),
+        ("帮我看看这个车", "clarify"),
+        ("它值得入手吗", "clarify"),
+    ],
+)
+def test_classify_stable_common_routes_without_model(question, expected):
+    from app import nlu
+
+    with patch("app.nlu.chat") as mock_chat:
+        result = nlu.classify(question)
+
+    assert result["intent"] == expected
+    assert result["llm_calls"] == 0
+    mock_chat.assert_not_called()
+
+
+def test_off_topic_rule_does_not_swallow_automotive_question():
+    from app.nlu import deterministic_intent_hint
+
+    assert deterministic_intent_hint("天气如何影响新能源汽车销量") is None
+
+
+def test_classify_mixed_greeting_never_silently_becomes_chat():
+    from app import nlu
+
+    model = (
+        '{"intent":"chat","confidence":0.95,"top2_intent":"clarify",'
+        '"top2_confidence":0.02,"brands":[],"models":[],"time":[],'
+        '"metrics":[],"energy_types":[],"normalized_question":"你好比亚迪"}'
+    )
+    with patch("app.nlu.chat", return_value=model):
+        result = nlu.classify("你好比亚迪")
+
+    assert result["intent"] == "clarify"
+    assert result["source"] == "mixed_greeting_guard"
+    assert result["entities"]["brands"] == ["比亚迪"]
+    assert result["is_complete"] is False
+    assert result["llm_calls"] == 1
+
+
+def test_classify_merges_local_brand_into_partial_model_entities():
+    from app import nlu
+
+    model = (
+        '{"intent":"rag","confidence":0.9,"top2_intent":"clarify",'
+        '"top2_confidence":0.05,"brands":[],"models":[],"time":["2026年"],'
+        '"metrics":[],"energy_types":[],"normalized_question":"比亚迪怎么样"}'
+    )
+    with patch("app.nlu.chat", return_value=model):
+        result = nlu.classify("比亚迪怎么样")
+
+    assert result["intent"] == "rag"
+    assert result["entities"]["brands"] == ["比亚迪"]
+    assert result["entities"]["time"] == ["2026年"]
+    assert result["llm_calls"] == 1
+
+
+def test_config_load_does_not_eagerly_load_few_shot_embeddings(monkeypatch):
+    from app import nlu
+
+    monkeypatch.setattr(nlu, "_cfg", None)
+    monkeypatch.setattr(nlu, "_few_shot_initialized", False)
+    with patch("app.nlu.embed_passages") as embed:
+        assert nlu.layer1_prefilter("你好")["intent"] == "chat"
+    embed.assert_not_called()

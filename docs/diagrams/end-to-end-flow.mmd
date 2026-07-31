@@ -1,0 +1,41 @@
+flowchart TD
+  U["用户自然语言提问"] --> API["POST /api/ask<br/>JWT + FastAPI"]
+  API --> INT["intent_router<br/>规则/实体/LLM 分层识别"]
+  INT --> R{"五意图路由"}
+
+  R -- sql --> SL["schema_link"]
+  R -- rag --> RR["rag_retrieve"]
+  R -- hybrid --> FAN["并行 fan-out"]
+  R -- clarify --> CL["clarify：本轮追问后结束"]
+  R -- chat --> CT["chitchat：轻量回答后结束"]
+  FAN --> SL
+  FAN --> RR
+
+  SL --> GEN["gen_sql"]
+  GEN --> EXE["exec_sql<br/>sqlglot AST 只读护栏 + 只读执行"]
+  EXE -- 执行失败且有预算 --> FIX["fix_sql"] --> EXE
+  EXE -- 执行成功 --> VER["verify_sql<br/>确定性结构校验 + 可选 LLM 语义校验"]
+  VER -- 不匹配且有预算 --> FIX
+  VER -- 通过 --> CH["chart：规则生成图表描述符"]
+  EXE -- 失败耗尽 --> INS["insight：诚实降级"]
+  VER -- 校验失败耗尽 --> INS
+  CH --> INS
+
+  RR --> RA["rag_answer<br/>证据门控 + 引用"]
+  INS --> CMP["compose（defer=True）"]
+  RA --> CMP
+  CMP --> SSE["主问答 SSE：stage / intent / sql / rows / chart / collection<br/>insight / citation / done / error"]
+
+  INS -. "SQL 成功但空结果" .-> FB{"先查知识库证据"}
+  FB -- 命中 --> SSE
+  FB -- 未命中 --> PIPE["异步 Research → Plan → Code ≤3 并行"]
+  PIPE -. "search_web 白名单工具" .-> SEARCH["Tavily → Brave<br/>本地可降级百度/Bing HTML"]
+  PIPE --> REVIEW{"Review 判定<br/>should_write_to_rag？"}
+  REVIEW -- "是" --> PRIV["仅写发起用户私有 RAG<br/>不回填销量事实表，不自动重跑原 SQL"]
+  REVIEW -- "否" --> NWRITE["保留任务结果，不写知识库"]
+  PIPE --> TASK["独立任务 SSE：stage / done / error"]
+
+  CL --> END1(["结束"])
+  CT --> END1
+  SSE --> END1
+  TASK --> END1

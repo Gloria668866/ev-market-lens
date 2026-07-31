@@ -5,9 +5,18 @@
 修法（纯应用层，不依赖 pg_jieba 扩展）：入库把 content 用 jieba 切成空格分隔词存进 content_tokens，
 PG simple 对空格分词即生效；查询同样 jieba 切词、用 OR 组 tsquery 提召回。
 """
+import logging
 import re
+import warnings
 
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+    module=r"jieba\._compat",
+)
 import jieba
+jieba.setLogLevel(logging.WARNING)
 
 # 只保留中英数 token（去标点/空白），避免污染 tsquery
 _VALID = re.compile(r"[一-鿿A-Za-z0-9]+")

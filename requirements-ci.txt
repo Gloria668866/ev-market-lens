@@ -1,0 +1,26 @@
+# Lightweight dependencies for unit tests and static deployment contracts.
+# Excludes torch, sentence-transformers, PDF parsers, and crawl4ai.
+pytest>=8.0
+fastapi>=0.110
+uvicorn>=0.29
+sse-starlette>=2.1
+httpx>=0.27
+sqlparse>=0.5
+sqlglot>=25
+openai>=1.30
+python-dotenv>=1.0
+pydantic>=2.6
+sqlalchemy>=2.0
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]>=3.3
+python-multipart>=0.0.9
+langgraph>=0.2
+numpy>=1.26
+PyYAML>=6.0
+jieba>=0.42
+celery>=5.3
+redis>=5.0
+psycopg[binary]>=3.1
+pgvector>=0.3
+minio>=7.2

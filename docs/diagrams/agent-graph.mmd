@@ -1,0 +1,30 @@
+flowchart LR
+  S(["START"]) --> IR["1 intent_router"]
+  IR -- sql --> SL["4 schema_link"]
+  IR -- rag --> RR["11 rag_retrieve"]
+  IR -- hybrid --> SL
+  IR -- hybrid --> RR
+  IR -- clarify --> CL["2 clarify"]
+  IR -- chat --> CC["3 chitchat"]
+
+  SL --> GS["5 gen_sql"]
+  GS --> ES["6 exec_sql"]
+  ES -- "成功" --> VS["8 verify_sql"]
+  ES -- "失败且可重试" --> FS["7 fix_sql"]
+  FS --> ES
+  ES -- "失败耗尽" --> IN["10 insight"]
+  VS -- "通过" --> CH["9 chart"]
+  VS -- "不匹配且可重试" --> FS
+  VS -- "不匹配耗尽" --> IN
+  CH --> IN
+
+  RR --> RA["12 rag_answer"]
+  IN --> CP["13 compose<br/>defer=True"]
+  RA --> CP
+
+  CL --> E(["END"])
+  CC --> E
+  CP --> E
+
+  NOTE["共 13 个节点；hybrid 为双分支并行，compose 延迟到所有在途分支完成后只执行一次"]
+  NOTE -.-> CP

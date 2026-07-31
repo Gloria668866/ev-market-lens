@@ -190,7 +190,8 @@ class TestPrices:
         data = r.json()
         assert "items" in data
         assert "count" in data
-        assert data["count"] <= 5
+        assert data["returned"] <= 5
+        assert data["count"] >= data["returned"]
 
     def test_price_brands_returns_list(self):
         client = _app_client()
@@ -218,7 +219,7 @@ class TestAdminGuard:
     def test_non_admin_cannot_access_admin_endpoints(self):
         client = _app_client()
         _, tok = _register_login(client, f"nonadmin_{int(time.time()*1000)%10**8}")
-        for path in ["/api/admin/overview", "/api/admin/users"]:
+        for path in ["/api/admin/overview", "/api/admin/metrics", "/api/admin/users"]:
             r = client.get(path, headers=_auth(tok))
             assert r.status_code == 403, f"非管理员访问 {path} 应 403，实际 {r.status_code}"
 
@@ -232,6 +233,81 @@ class TestAdminGuard:
         r = client.get("/api/admin/overview", headers=_auth(tok))
         assert r.status_code == 200
         assert "users" in r.json()   # 实际字段名是 users，非 total_users
+
+    def test_admin_can_access_process_metrics_without_secrets(self):
+        client = _app_client()
+        r_login = client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "admin123"},
+        )
+        if r_login.status_code != 200:
+            pytest.skip("admin 账号未初始化，跳过")
+        tok = r_login.json()["access_token"]
+        response = client.get("/api/admin/metrics", headers=_auth(tok))
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["scope"] == "current_process"
+        assert payload["resets_on_restart"] is True
+        assert payload["ask_max_concurrency"] >= 1
+        assert {"calls", "errors", "p50_ms", "p95_ms", "total_tokens"} <= set(payload["llm"])
+        assert "api_key" not in str(payload).lower()
+
+    def test_admin_password_reset_revokes_existing_token(self):
+        from app.database import SessionLocal
+        from app.models import User
+        from sqlalchemy import select
+
+        client = _app_client()
+        username, token = _register_login(
+            client,
+            f"reset_admin_{int(time.time()*1000)%10**8}",
+        )
+        with SessionLocal() as db:
+            user = db.scalar(select(User).where(User.username == username))
+            user.role = "admin"
+            user_id = user.id
+            db.commit()
+
+        response = client.post(
+            f"/api/admin/users/{user_id}/reset-password",
+            headers=_auth(token),
+            json={"new_password": "new-password-123"},
+        )
+        assert response.status_code == 200, response.text
+        assert client.get("/api/auth/me", headers=_auth(token)).status_code == 401
+
+    def test_admin_can_create_account_when_public_registration_is_closed(self):
+        from app.database import SessionLocal
+        from app.models import User
+        from sqlalchemy import select
+
+        client = _app_client()
+        username, token = _register_login(
+            client,
+            f"creator_admin_{int(time.time()*1000)%10**8}",
+        )
+        with SessionLocal() as db:
+            admin = db.scalar(select(User).where(User.username == username))
+            admin.role = "admin"
+            db.commit()
+
+        created_username = f"controlled_{int(time.time()*1000)%10**8}"
+        with patch("app.auth.ALLOW_PUBLIC_REGISTRATION", False):
+            response = client.post(
+                "/api/admin/users",
+                headers=_auth(token),
+                json={
+                    "username": created_username,
+                    "password": "controlled-password",
+                    "nickname": "受控演示账号",
+                },
+            )
+        assert response.status_code == 200, response.text
+        login = client.post(
+            "/api/auth/login",
+            json={"username": created_username, "password": "controlled-password"},
+        )
+        assert login.status_code == 200
 
 
 # ────────────────────────────────────────────
@@ -265,6 +341,9 @@ class TestPublicShare:
 # ────────────────────────────────────────────
 class TestHistory:
     def test_delete_own_conversation(self):
+        from app.database import SessionLocal
+        from app.models import Conversation, MemoryEpisode
+
         client = _app_client()
         _, tok = _register_login(client, f"del_hist_{int(time.time()*1000)%10**8}")
 
@@ -273,10 +352,22 @@ class TestHistory:
         with patch("app.main.run_agent", _noop):
             r = client.post("/api/ask_sync", headers=_auth(tok), json={"question": "hello"})
         conv_id = r.json()["conversation_id"]
+        with SessionLocal() as db:
+            conversation = db.get(Conversation, conv_id)
+            episode = MemoryEpisode(
+                user_id=conversation.user_id,
+                conversation_id=conv_id,
+                summary="delete cascade regression",
+            )
+            db.add(episode)
+            db.commit()
+            episode_id = episode.id
 
         # 删除
         rd = client.delete(f"/api/history/{conv_id}", headers=_auth(tok))
         assert rd.status_code == 200
+        with SessionLocal() as db:
+            assert db.get(MemoryEpisode, episode_id) is None
 
         # 再访问 → 404
         r2 = client.get(f"/api/history/{conv_id}", headers=_auth(tok))

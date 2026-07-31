@@ -1,8 +1,10 @@
-// 运行期配置：全部从 .env 读取（Vite 在构建时注入 import.meta.env.*），为上线预留。
-export const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '')
+// 生产默认同源（"" → /api，由 Caddy 反代）；开发未配置时才回退到 localhost:8000。
+// 不能用 `|| localhost`：Docker 有意注入空字符串时会被误判，导致线上浏览器请求访客自己的 localhost。
+const DEFAULT_API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE).replace(/\/$/, '')
 
 // 'mock' = 用本地 mock（后端未就绪）；'live' = 连真后端。
-export const DATA_SOURCE = import.meta.env.VITE_DATA_SOURCE !== 'mock' ? 'live' : 'live'
+export const DATA_SOURCE = import.meta.env.VITE_DATA_SOURCE === 'mock' ? 'mock' : 'live'
 
 export const IS_MOCK = DATA_SOURCE === 'mock'
 
@@ -36,4 +38,5 @@ export const ENDPOINTS = {
   // 车型报价（查 fact_price 实采数据）
   prices: `${API_BASE}/api/prices`,
   priceBrands: `${API_BASE}/api/prices/brands`,
+  taskStream: (id) => `${API_BASE}/api/tasks/${id}/stream`,
 }

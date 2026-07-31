@@ -9,6 +9,7 @@ BACKUP_DIR=${BACKUP_DIR:-./backups}
 KEEP_DAYS=${KEEP_DAYS:-14}
 TS=$(date +%Y%m%d_%H%M%S)
 mkdir -p "$BACKUP_DIR"
+BACKUP_DIR=$(cd "$BACKUP_DIR" && pwd)
 
 echo ">> [backup $TS] PostgreSQL bi/app …"
 # 容器内本地连接走 trust，无需密码；dump 后 gzip
@@ -19,9 +20,10 @@ echo ">> [backup $TS] MinIO 对象 …"
 # 借 minio 容器的网络命名空间，用 mc 镜像把桶同步到本地
 docker run --rm --network "container:carmirror-minio" \
   -e MC_HOST_s="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@localhost:9000" \
-  -v "$(pwd)/$BACKUP_DIR/minio_$TS:/backup" minio/mc:latest \
-  sh -c "mc mirror --quiet s/${MINIO_BUCKET_UPLOADS:-kb-uploads} /backup/${MINIO_BUCKET_UPLOADS:-kb-uploads}; \
-         mc mirror --quiet s/${MINIO_BUCKET_RAW:-crawl-raw} /backup/${MINIO_BUCKET_RAW:-crawl-raw}" || true
+  -v "$BACKUP_DIR/minio_$TS:/backup" \
+  --entrypoint /bin/sh minio/mc:latest -c \
+  "mc mirror --quiet s/${MINIO_BUCKET_UPLOADS:-kb-uploads} /backup/${MINIO_BUCKET_UPLOADS:-kb-uploads}; \
+   mc mirror --quiet s/${MINIO_BUCKET_RAW:-crawl-raw} /backup/${MINIO_BUCKET_RAW:-crawl-raw}"
 
 echo ">> 轮转：删除 ${KEEP_DAYS} 天前的备份"
 find "$BACKUP_DIR" -name 'pg_*.sql.gz' -mtime +"$KEEP_DAYS" -delete 2>/dev/null || true

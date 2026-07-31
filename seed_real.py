@@ -1,5 +1,7 @@
-"""生成车市镜分析库（真实 schema：dim_brand/dim_series/dim_date/fact_sales_rank/fact_price/fact_review）
-运行: python seed_real.py
+"""生成车市镜的确定性演示数据库（schema 真实，数值为合成样例）。
+
+用于首次克隆后零网络启动；不能把这里的销量写进报告或简历。真实数据请运行
+``python data/crawl_sales.py`` 后再运行 ``python data/clean_load.py``。
 """
 import random
 from datetime import date, timedelta
@@ -86,27 +88,26 @@ def run():
             conn.execute(text("INSERT INTO dim_brand(brand_id, brand_name) VALUES(:a,:b)"),
                          {"a": bid, "b": bname})
 
+        powertrain_map = {1: "纯电", 2: "插混", 3: "增程"}
         for s in SERIES:
             conn.execute(text(
                 "INSERT INTO dim_series(series_id, series_name, brand_id, segment, powertrain, endurance_km, guide_price_min, guide_price_max) "
                 "VALUES(:a,:b,:c,:d,:e,:f,:g,:h)"),
-                {"a": s[0], "b": s[1], "c": s[2], "d": s[3], "e": s[4], "f": s[5], "g": s[6], "h": s[7]})
+                {"a": s[0], "b": s[1], "c": s[2], "d": s[3],
+                 "e": powertrain_map[s[4]], "f": s[5], "g": s[6], "h": s[7]})
 
         dates = []
-        did = 1
         for y in (2024, 2025, 2026):
             for m in range(1, 13):
-                if y == 2026 and m > 4:
+                if y == 2026 and m > 6:
                     continue
                 ym_str = f"{y}-{m:02d}"
-                dates.append((did, y, m, (m - 1) // 3 + 1, ym_str))
-                did += 1
+                dates.append((y * 100 + m, y, m, (m - 1) // 3 + 1, ym_str))
 
         for d in dates:
             conn.execute(text("INSERT INTO dim_date(date_id, year, month, quarter, ym) VALUES(:a,:b,:c,:d,:e)"),
                          {"a": d[0], "b": d[1], "c": d[2], "d": d[3], "e": d[4]})
 
-        powertrain_map = {1: "纯电", 2: "插混", 3: "增程"}
         base_volumes = {}
         for s in SERIES:
             base_volumes[s[0]] = {
@@ -127,7 +128,7 @@ def run():
                 conn.execute(text(
                     "INSERT INTO fact_sales_rank(id, series_id, date_id, new_energy_type, rank_type, rank, last_rank, volume) "
                     "VALUES(:id,:sid,:did,:ne,:rt,:rk,:lr,:vol)"),
-                    {"id": sid, "sid": s[0], "did": d[0], "ne": pt_val, "rt": 0,
+                    {"id": sid, "sid": s[0], "did": d[0], "ne": pt_val, "rt": 11,
                      "rk": rank, "lr": last_rank_val, "vol": vol})
                 sid += 1
 
@@ -135,7 +136,7 @@ def run():
                     conn.execute(text(
                         "INSERT INTO fact_price(id, series_id, date_id, snapshot_date, guide_price_min, guide_price_max, price_text, descender_price) "
                         "VALUES(:id,:sid,:did,:sd,:gmin,:gmax,:pt,:dp)"),
-                        {"id": price_id, "sid": s[0], "did": d[0], "sd": f"{d[3]}-{d[2]:02d}-01",
+                        {"id": price_id, "sid": s[0], "did": d[0], "sd": f"{d[1]}-{d[2]:02d}-01",
                          "gmin": s[6], "gmax": s[7],
                          "pt": f"{s[6]}-{s[7]}万",
                          "dp": round(random.uniform(0, 1.5), 2)})
@@ -146,7 +147,7 @@ def run():
                     conn.execute(text(
                         "INSERT INTO fact_review(id, series_id, date_id, snapshot_date, review_count, score) "
                         "VALUES(:id,:sid,:did,:sd,:rc,:sc)"),
-                        {"id": review_id, "sid": s[0], "did": d[0], "sd": f"{d[3]}-{d[2]:02d}-01",
+                        {"id": review_id, "sid": s[0], "did": d[0], "sd": f"{d[1]}-{d[2]:02d}-01",
                          "rc": random.randint(50, 5000), "sc": score_val})
                     review_id += 1
 

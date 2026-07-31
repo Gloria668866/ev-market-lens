@@ -1,5 +1,5 @@
 // 鉴权 API：mock（前端自洽，demo 用）↔ live（真后端）一个开关切换，与 ask 同套路。
-// live 契约（已对齐后端 app/auth.py 实测实现，PRD-2 §17.3/§17.4）：
+// live 契约（已对齐后端 app/auth.py；见 docs/technical-design.md 第 8 节）：
 //   POST /api/auth/register {username,password,nickname?} -> {user:{...}}   ← 注意：不返回 token，需再 login
 //   POST /api/auth/login    {username,password}           -> {access_token, token_type, user:{...}}
 //   GET  /api/auth/me        (Bearer)                      -> {user:{...}}

@@ -17,9 +17,10 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from .database import get_db
+from .database import SessionLocal, get_db
 from .models import User, Conversation, Message, SavedInsight
 from .security import hash_password, verify_password, create_access_token, decode_token
+from .config import ALLOW_PUBLIC_REGISTRATION
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)  # auto_error=False：自己给中文 401，不抛默认 403
@@ -49,11 +50,11 @@ def _user_public(u: User) -> dict:
     }
 
 
-def get_current_user(
-    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
-    db: Session = Depends(get_db),
+def _resolve_current_user(
+    cred: Optional[HTTPAuthorizationCredentials],
+    db: Session,
 ) -> User:
-    """从 Bearer token 解析出当前用户；缺失/无效/过期/用户不存在 → 401。"""
+    """Resolve and validate one bearer credential in the supplied short session."""
     if cred is None or not cred.credentials:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "未提供登录凭证（需 Authorization: Bearer <token>）")
     result = decode_token(cred.credentials)
@@ -71,6 +72,29 @@ def get_current_user(
     return user
 
 
+def get_current_user(
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    """常规端点鉴权；请求处理期间复用 FastAPI 注入的应用库 Session。"""
+    return _resolve_current_user(cred, db)
+
+
+def get_current_user_detached(
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> User:
+    """Streaming-safe auth dependency whose DB session closes before response.
+
+    The returned ORM object is explicitly detached and only its already-loaded
+    scalar fields are used.  This prevents long-lived SSE responses from
+    holding a PostgreSQL pool connection for their full duration.
+    """
+    with SessionLocal() as db:
+        user = _resolve_current_user(cred, db)
+        db.expunge(user)
+        return user
+
+
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """管理员守卫：非 admin → 403。用于 /api/admin/* 等受限接口。"""
     if (user.role or "user") != "admin":
@@ -80,6 +104,11 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 @router.post("/register")
 def register(body: RegisterIn, db: Session = Depends(get_db)):
+    if not ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "当前环境已关闭公开注册，请联系管理员获取演示账号",
+        )
     if not body.username.strip() or not body.password:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "用户名和密码不能为空")
     if len(body.password) < 6:
@@ -173,7 +202,7 @@ def my_stats(user: User = Depends(get_current_user), db: Session = Depends(get_d
 
 def bootstrap_admin(db: Session) -> tuple:
     """启动时确保有一个管理员账号（演示开箱即用）。ADMIN_USERNAME/ADMIN_PASSWORD 可在 .env 配置。
-    返回 (action, username)：created / promoted / exists。"""
+    返回 (action, username)：created / password_updated / exists。"""
     import os
     uname = os.getenv("ADMIN_USERNAME", "admin")
     pwd = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -184,7 +213,12 @@ def bootstrap_admin(db: Session) -> tuple:
         db.commit()
         return ("created", uname)
     if (u.role or "user") != "admin":
-        u.role = "admin"
+        raise RuntimeError(
+            f"ADMIN_USERNAME={uname!r} 已被普通用户占用；拒绝静默提权，请更换管理员用户名"
+        )
+    if not verify_password(pwd, u.password_hash):
+        u.password_hash = hash_password(pwd)
+        u.token_version = int(u.token_version or 0) + 1
         db.commit()
-        return ("promoted", uname)
+        return ("password_updated", uname)
     return ("exists", uname)
