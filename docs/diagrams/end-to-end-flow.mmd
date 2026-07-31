@@ -29,6 +29,7 @@ flowchart TD
   INS -. "SQL 成功但空结果" .-> FB{"先查知识库证据"}
   FB -- 命中 --> SSE
   FB -- 未命中 --> PIPE["异步 Research → Plan → Code ≤3 并行"]
+  PIPE -. "search_web 白名单工具" .-> SEARCH["Tavily → Brave<br/>本地可降级百度/Bing HTML"]
   PIPE --> REVIEW{"Review 判定<br/>should_write_to_rag？"}
   REVIEW -- "是" --> PRIV["仅写发起用户私有 RAG<br/>不回填销量事实表，不自动重跑原 SQL"]
   REVIEW -- "否" --> NWRITE["保留任务结果，不写知识库"]

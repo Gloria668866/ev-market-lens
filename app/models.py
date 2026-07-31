@@ -45,7 +45,7 @@ class Message(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)  # 冗余便于过滤
     role: Mapped[str] = mapped_column(String(16), nullable=False)            # 'user' / 'assistant'
     content: Mapped[str] = mapped_column(Text, default="")
-    intent: Mapped[Optional[str]] = mapped_column(String(16))                # sql / rag / hybrid / clarify
+    intent: Mapped[Optional[str]] = mapped_column(String(16))                # sql / rag / hybrid / clarify / chat
     sql_text: Mapped[Optional[str]] = mapped_column(Text)                    # 助手消息的生成 SQL（可溯源）
     result_meta: Mapped[Optional[str]] = mapped_column(Text)                 # JSON：图表描述符/列+行/引用/trace，供历史会话还原图表&引用
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

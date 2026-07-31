@@ -94,6 +94,12 @@ PIPELINE_MAX_PARALLEL = min(
     max(int(os.getenv("PIPELINE_MAX_PARALLEL", "2" if IS_PRODUCTION else "3")), 1),
     4,
 )
+# 本地 fallback 不具备 Redis 的持久队列语义，因此同时限制“运行中 + 等待中”
+# 的任务总数，容量耗尽时快速拒绝，避免 ThreadPoolExecutor 的无界队列积压。
+PIPELINE_LOCAL_MAX_INFLIGHT = min(
+    max(int(os.getenv("PIPELINE_LOCAL_MAX_INFLIGHT", "4")), 1),
+    32,
+)
 # Cost-bearing interactive Agent runs use a separate bounded pool.  Excess
 # requests fail fast instead of creating unbounded threads and exhausting model,
 # database or memory capacity.

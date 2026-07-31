@@ -224,7 +224,9 @@ query
 - 旧 SQLite 文件启动时幂等增加血缘列；
 - 旧 PostgreSQL 数据卷在 API 启动前执行幂等 SQL migration；
 - `data/reindex_embeddings.py` 只重算缺失/旧版本/错维度向量，不重新解析原文；
-- `/ready` 报告 compatible/legacy/mismatched/missing，存在 legacy 或 mismatch 时不宣称 ready。
+- `/ready` 报告 compatible/legacy/mismatched/missing；只有 `missing=legacy=mismatched=0`
+  且 `compatible=retrievable` 才通过。本地还校验向量 BLOB 长度，PG 还校验列维度等于
+  当前 `EMBED_DIM`。
 
 2026-07-29 已对本地活动子块执行一次真实重建：64/64 compatible，legacy/mismatched/missing 均为 0。
 
@@ -253,9 +255,10 @@ flowchart LR
     PLAN --> C1["Code 1"]
     PLAN --> C2["Code 2"]
     PLAN --> C3["Code 3"]
-    C1 --> REVIEW["Review"]
-    C2 --> REVIEW
-    C3 --> REVIEW
+    C1 --> TOOLS["白名单采集工具<br/>search_web: Tavily → Brave → 百度/Bing HTML"]
+    C2 --> TOOLS
+    C3 --> TOOLS
+    TOOLS --> REVIEW["Review"]
     REVIEW --> CHECK{"should_write_to_rag？"}
     CHECK -->|是| PRIVATE["发起用户私有 RAG"]
     CHECK -->|否| RESULT["只保留任务结果"]
@@ -264,7 +267,11 @@ flowchart LR
 - `Plan` 生成可并行的采集项；
 - `Code` 阶段最多三个并行实例；
 - Code Agent 只通过 function calling 调用白名单工具，不执行其生成的任意代码；
-- 生产任务进入 Redis/Celery，本地无队列时使用有界后台执行并报告进度；
+- `search_web` 统一输出 `title / url / snippet`，官方链按 Tavily → Brave 降级；
+- 官方搜索都不可用时，本地可尝试百度/Bing HTML；生产至少一个官方 key 才通过 `/ready`；
+- 搜索 key 只通过请求头发送，provider 失败仅保留安全错误码，不进入任务结果或日志正文；
+- 生产任务进入 Redis/Celery；本地无队列时使用单 worker，并以
+  `PIPELINE_LOCAL_MAX_INFLIGHT` 限制运行中与等待中任务总数，满载快速拒绝；
 - Review 通过的结果写入发起用户私有知识库。
 
 当前链路**不**：
@@ -348,17 +355,21 @@ stage / intent / sql / rows / chart / collection / insight / citation / done / e
 ```text
 Caddy (HTTPS + frontend)
   → FastAPI
+  → migrate (API/worker 启动前幂等迁移)
   → PostgreSQL + pgvector
   → Redis
   → Celery worker / beat
   → MinIO
+  → Tavily / Brave Web Search API
 ```
 
-PostgreSQL、Redis、MinIO 和 Caddy 使用 named volumes；BGE/reranker 权重与
+`migrate` 在 PostgreSQL 健康后执行幂等应用/RAG schema 迁移；API 与 worker
+等待其成功完成后才启动。PostgreSQL、Redis、MinIO 和 Caddy 使用 named volumes；BGE/reranker 权重与
 `data/raw` 使用宿主机 bind mount。Caddy 只对外暴露 80/443，并提供备份/恢复脚本。
 旧应用库卷会在 API/worker 启动前先运行幂等 migration。`PARSER_BACKEND=lite`
 是当前生产默认值。生产环境还默认关闭公开注册，并以账号日配额和每进程并发上限
-限制公开 Demo 的模型成本；管理员应先创建演示账号，再按需要决定是否开放注册。
+限制公开 Demo 的模型成本；无数据研究还要求至少配置 Tavily 或 Brave 的一个官方
+搜索 key，否则 `/ready` 返回 503。管理员应先创建演示账号，再按需要决定是否开放注册。
 
 截至 2026-07-29，部署配置和操作文档已经完成，但尚未在真实云服务器的**全新数据卷**上跑完注册、数据初始化、Text2SQL、RAG 上传/检索、异步任务、重启恢复、HTTPS 和备份恢复全链路。2C8G 只是最低演示目标，建议 4C8G 起步；两者都仍需真实云端压测。因此正确表述是“具备生产化部署配置”，不是“已生产验证”。
 

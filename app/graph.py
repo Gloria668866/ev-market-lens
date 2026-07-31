@@ -14,13 +14,13 @@
 > 挂起（如分步收集多个查询槽位、Human-in-the-loop 审批），再引入 checkpointer + thread_id=conversation_id。
 
 状态流转（§7.5）：
-  intent_router ─┬─ sql    → schema_link → gen_sql → exec_sql ─┬─成功→ chart → insight ┐
-                 │                                   ▲          ├─失败可重试→ fix_sql ─┘(回 exec_sql)
-                 │                                   └──────────┴─失败耗尽→ insight(降级)
-                 ├─ rag    → rag_retrieve → rag_answer ───────────────────────────────┐
-                 ├─ hybrid → [schema_link 链 ∥ rag_retrieve 链]（并行）                │
-                 └─ clarify→ clarify → END                                            ▼
-                                              insight / rag_answer ───────────────→ compose → END
+  sql    → schema_link → gen_sql → exec_sql → verify_sql → chart → insight → compose
+             exec 失败且可重试 ─┐        ┌─ verify 拒绝且可重试
+                                └→ fix_sql ─→ exec_sql
+             任一重试耗尽 → insight（诚实降级）
+  rag    → rag_retrieve → rag_answer → compose
+  hybrid → 上述两条分支并行，compose(defer=True) 只执行一次
+  clarify / chat → 对应节点 → END
 """
 import json as _json
 import logging

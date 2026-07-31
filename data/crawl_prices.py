@@ -1,5 +1,8 @@
-"""从懂车帝口碑页采集车型实时报价（复用已有 fact_price 数据）。
-实际 API 需用 scrapling 抓取，本脚本绕过——fact_price 已是真实全覆盖。
+"""可选实验脚本：从懂车帝口碑页补充车型报价。
+
+该脚本不属于销量生产主链路，也不能证明 fact_price 已真实全覆盖；数据库里的
+seed 价格是演示数据。只有实际运行抓取、校验来源与时间并使用 --apply 后，相关
+记录才能按对应采集批次描述为公开来源数据。
 
 用法：python data/crawl_prices.py [--apply]
   --apply  写回 bi_demo.db（价格已有则 SKIP）
@@ -73,7 +76,7 @@ def run(apply: bool = False):
         from scrapling import Playwright
     except ImportError:
         print("\n⚠️  scrapling 未安装。要真爬取请在另一台机器用专用 venv 跑。")
-        print("   当前已有 seed 数据覆盖全部价格字段，可跳过。")
+        print("   当前 seed 数据仅用于演示；如需真实价格必须安装依赖并实际采集。")
         return
 
     print(f"开始采集 {len(series)} 车系报价...")

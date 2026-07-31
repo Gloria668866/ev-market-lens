@@ -29,6 +29,7 @@ except ImportError:
 from .config import (
     AGENTS_CONFIG_PATH,
     PIPELINE_LOCAL_FALLBACK,
+    PIPELINE_LOCAL_MAX_INFLIGHT,
     PIPELINE_MAX_PARALLEL,
     REDIS_URL,
 )
@@ -116,6 +117,7 @@ _progress_cache: OrderedDict[str, dict] = OrderedDict()
 _progress_cache_lock = threading.Lock()
 _PROGRESS_CACHE_MAX = 200
 _local_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pipeline-local")
+_local_slots = threading.BoundedSemaphore(PIPELINE_LOCAL_MAX_INFLIGHT)
 MAX_PLAN_TASKS = 4
 MAX_TOOL_CALLS_PER_ROUND = 4
 MAX_TOTAL_TOOL_CALLS = 12
@@ -679,7 +681,8 @@ def enqueue_pipeline(
     """Queue collection without ever running the expensive pipeline in the request thread.
 
     Production: Redis + Celery.
-    Local development: one bounded background worker with in-process progress cache.
+    Local development: one background worker with a bounded total in-flight queue
+    and an in-process progress cache.
     """
     _set_progress(task_id, {
         "stage": "queued",
@@ -700,16 +703,39 @@ def enqueue_pipeline(
             _log.warning("Celery enqueue failed for %s: %s", task_id, exc)
 
     if PIPELINE_LOCAL_FALLBACK:
+        if not _local_slots.acquire(blocking=False):
+            error = (
+                "Local pipeline capacity exhausted "
+                f"(max in-flight={PIPELINE_LOCAL_MAX_INFLIGHT})"
+            )
+            _set_progress(task_id, {
+                "stage": "queue",
+                "status": "failed",
+                "error": error,
+                "ts": time.time(),
+            })
+            return {
+                "accepted": False,
+                "mode": "capacity_exhausted",
+                "task_id": task_id,
+                "error": error,
+            }
         try:
-            _local_executor.submit(
+            future = _local_executor.submit(
                 run_pipeline, task_id, original_question, original_user_id
             )
+            if hasattr(future, "add_done_callback"):
+                future.add_done_callback(lambda _future: _local_slots.release())
+            else:
+                # Test doubles and non-standard executors may not return Future.
+                _local_slots.release()
             return {
                 "accepted": True,
                 "mode": "local_background",
                 "task_id": task_id,
             }
         except Exception as exc:
+            _local_slots.release()
             _log.error("Local pipeline enqueue failed for %s: %s", task_id, exc)
             error = str(exc)
     else:

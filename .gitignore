@@ -38,7 +38,10 @@ data/probe/*.txt
 
 # ===== Node（docx 生成用全局安装的 docx）=====
 node_modules/
+
+# ===== 前端构建产物 =====
 frontend/dist/
+phone/dist/
 
 # ===== 渲染中间产物 =====
 *.pdf

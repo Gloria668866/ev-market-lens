@@ -19,6 +19,7 @@
 | Text2SQL | Schema 快照/规模化筛表 → SQL 生成 → sqlglot AST 安全护栏 → 执行 → 结构与语义校验 → 图表描述符 |
 | RAG | 结构感知父子分块 → 双路召回 → RRF → BGE reranker → 证据门控 → 父块归并 → typed 带引用回答 |
 | 缺数采集 | 空结果触发异步 `Research → Plan → Code × 最多 3 并行 → Review`；过程可查询、结果按用户隔离 |
+| 研究搜索 | 白名单 `search_web` 按 `Tavily → Brave → Baidu HTML → Bing HTML` 降级；生产至少配置一个官方 API |
 | 多轮与记忆 | 代词/省略型追问继承上下文；完整新问题重置实体；后台提取安全的会话摘要和偏好 |
 | 产品工程 | JWT 多租户、原子日配额、共享有界问答容量、短 DB Session、SSE、管理员指标、Docker Compose、Caddy HTTPS |
 
@@ -40,6 +41,7 @@ flowchart LR
     SQL --> BI[("销量星型模型")]
     RAG --> KB[("知识库")]
     SQL -.->|无结果| PIPE["Research → Plan → Code ≤3 → Review"]
+    PIPE -.-> SEARCH["Tavily → Brave<br/>本地可降级到百度/Bing HTML"]
     PIPE -.->|Review 允许时写入发起用户私有 RAG| KB
 ```
 
@@ -110,8 +112,14 @@ chat    : chitchat → END
 Research → Plan → Code agents（最多 3 个并行）→ Review
 ```
 
-Code Agent 只调用预定义采集工具，不执行其自行生成的代码。只有 Review 返回
-`should_write_to_rag=true` 的内容才写入**任务发起用户的私有 RAG**。当前版本：
+Code Agent 只调用预定义采集工具，不执行其自行生成的代码。通用网页搜索按
+`Tavily → Brave → Baidu HTML → Bing HTML` 降级，统一返回
+`title / url / snippet`；API key 只通过请求头发送，错误只暴露安全错误码。
+本地允许在没有官方 key 时尝试 HTML 搜索，但生产 `/ready` 要求至少配置
+`TAVILY_API_KEY` 或 `BRAVE_SEARCH_API_KEY`，不能把易受页面变化影响的 HTML
+抓取当作稳定上线能力。
+
+只有 Review 返回 `should_write_to_rag=true` 的内容才写入**任务发起用户的私有 RAG**。当前版本：
 
 - 不直接回写 `fact_sales_rank` 等销量事实表；
 - 不自动重新执行最初的 SQL；
@@ -187,7 +195,9 @@ python data/clean_load.py
 
 ## 部署
 
-生产配置与操作步骤见 [`deploy/DEPLOY.md`](deploy/DEPLOY.md)。`APP_ENV=production` 时公开注册默认关闭（`ALLOW_PUBLIC_REGISTRATION=false`），问答接口默认按账号限制为 UTC 自然日 30 次（`DAILY_QUESTION_LIMIT=30`），并以 `ASK_MAX_CONCURRENCY=2` 限制每个 API 进程的模型并发。问题一旦被系统接受就原子占用额度；断连/模型失败不退额度，也不伪造 assistant 消息。只有确实需要公开注册时才显式开启，并应按模型预算调整门禁。
+生产配置与操作步骤见 [`deploy/DEPLOY.md`](deploy/DEPLOY.md)。部署时必须至少配置
+`TAVILY_API_KEY` 或 `BRAVE_SEARCH_API_KEY`，否则生产 `/ready` 会返回 503。
+`APP_ENV=production` 时公开注册默认关闭（`ALLOW_PUBLIC_REGISTRATION=false`），问答接口默认按账号限制为 UTC 自然日 30 次（`DAILY_QUESTION_LIMIT=30`），并以 `ASK_MAX_CONCURRENCY=2` 限制每个 API 进程的模型并发。问题一旦被系统接受就原子占用额度；断连/模型失败不退额度，也不伪造 assistant 消息。只有确实需要公开注册时才显式开启，并应按模型预算调整门禁。
 
 在对外展示前，必须在目标云服务器的全新数据卷上完成一次管理员建号、登录门禁、配额、采集、Text2SQL、RAG 上传/检索、任务队列、重启恢复、HTTPS 和备份恢复验收。
 
@@ -196,6 +206,7 @@ python data/clean_load.py
 - 当前公开 RAG 评测只有 13 条正样本和 7 条负样本，运行在本地 SQLite + numpy 后端，适合检索、证据覆盖和拒答防回归，不足以支持“生成答案准确”或“生产 PG 已验证”结论。
 - 本地 numpy 检索面向小语料；大语料应使用生产 pgvector 链路。
 - Embedding 与 reranker 权重不入 Git；deep health 会实际推理并核对活动向量血缘。本地已重建为 64/64 compatible，生产 PG 仍需 fresh-volume 验收。
+- 无官方 Web Search key 时只提供开发态 HTML 降级，不能作为生产可用性证明。
 - 长期记忆是关键词召回，不是向量记忆系统。
 - 云端 fresh-volume 端到端验收尚未完成。
 

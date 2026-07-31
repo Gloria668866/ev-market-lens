@@ -1,0 +1,14 @@
+/* 车市镜 · 移动端设计令牌（与主站一致：干净亮色 SaaS + 车速红 + Geist） */
+:root {
+  --accent: #dc2626; --accent-press: #b91c1c; --accent-wash: #fef2f2; --accent-wash-2: rgba(220,38,38,.08); --accent-border: rgba(220,38,38,.22);
+  --info: #2563eb; --info-wash: #eff6ff;
+  --up: #16a34a; --up-wash: #f0fdf4; --down: #dc2626; --down-wash: #fef2f2;
+  --ink: #18181b; --ink-2: #52525b; --ink-3: #8a8a93; --ink-4: #b6b6bf;
+  --bg: #ffffff; --bg-subtle: #fafafa; --bg-sunken: #f3f3f5;
+  --line: #ececef; --line-strong: #dcdce0;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --sh-sm: 0 1px 2px rgba(17,17,17,.05);
+  --sh-md: 0 6px 20px -6px rgba(17,17,17,.10), 0 2px 6px -2px rgba(17,17,17,.05);
+  --font-sans: "Geist","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono: "Geist Mono",ui-monospace,Consolas,monospace;
+}

@@ -602,6 +602,26 @@ def test_enqueue_pipeline_uses_local_background_when_redis_is_down(monkeypatch):
     assert ap._get_progress("task_local")["user_id"] == 7
 
 
+def test_enqueue_pipeline_rejects_when_local_capacity_is_exhausted(monkeypatch):
+    import app.agent_pipeline as ap
+
+    class ExhaustedSlots:
+        def acquire(self, blocking=False):
+            assert blocking is False
+            return False
+
+    monkeypatch.setattr(ap, "_redis_available", lambda: False, raising=False)
+    monkeypatch.setattr(ap, "_local_slots", ExhaustedSlots(), raising=False)
+    monkeypatch.setattr(ap, "PIPELINE_LOCAL_FALLBACK", True, raising=False)
+
+    result = ap.enqueue_pipeline("task_overflow", "问题", 7)
+
+    assert result["accepted"] is False
+    assert result["mode"] == "capacity_exhausted"
+    assert "capacity exhausted" in result["error"]
+    assert ap._get_progress("task_overflow")["status"] == "failed"
+
+
 def test_run_pipeline_task_signature():
     from app.agent_pipeline import run_pipeline_task
     if run_pipeline_task is None:

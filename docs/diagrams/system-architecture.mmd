@@ -24,6 +24,7 @@ flowchart TB
   end
   MODEL["本地 BGE embedding + reranker"]
   LLM["OpenAI-compatible 对话模型 API"]
+  SEARCH["Web Search<br/>Tavily → Brave<br/>本地 HTML fallback"]
 
   UI --> TR --> AUTH --> AG
   AG --> T2S --> SAFE
@@ -39,6 +40,7 @@ flowchart TB
   QUEUE --> PGAPP
   QUEUE --> MINIO
   QUEUE --> LLM
+  PIPE --> SEARCH
   LF --> LLM
   AG --> LLM
   TR -. "stage / intent / sql / rows / chart / collection / insight / citation / done / error" .-> UI
