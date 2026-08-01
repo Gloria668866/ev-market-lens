@@ -7,7 +7,6 @@
 """
 import argparse
 import collections
-import hashlib
 import json
 import os
 import statistics
@@ -25,22 +24,34 @@ try:
 except Exception:
     pass
 
-from eval.common import load_jsonl, pct  # noqa: E402
+from eval.common import (  # noqa: E402
+    TEXT_HASH_SEMANTICS,
+    canonical_text_sha256,
+    load_jsonl,
+    pct,
+    text_file_manifest,
+    text_files_sha256,
+)
 from app.graph import intent_router       # noqa: E402
 
 LABELS = ["sql", "rag", "hybrid", "chat", "clarify"]
 DATASET = os.path.join(ROOT, "eval", "datasets", "intent.jsonl")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
 NLU_CONFIG = os.path.join(ROOT, "config", "nlu.yaml")
+CONFIG_INPUTS = (
+    os.path.join(ROOT, "app", "nlu.py"),
+    NLU_CONFIG,
+)
 
 
 def _build_meta() -> dict:
-    with open(DATASET, "rb") as stream:
-        dataset_sha256 = hashlib.sha256(stream.read()).hexdigest()
     meta = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "model": os.environ.get("LLM_MODEL", "unknown"),
-        "dataset_sha256": dataset_sha256,
+        "hash_semantics": TEXT_HASH_SEMANTICS,
+        "dataset_sha256": canonical_text_sha256(DATASET),
+        "config_files": text_file_manifest(CONFIG_INPUTS, root=ROOT),
+        "config_sha256": text_files_sha256(CONFIG_INPUTS, root=ROOT),
     }
     try:
         meta["git_commit"] = subprocess.check_output(
@@ -55,13 +66,6 @@ def _build_meta() -> dict:
         ).strip())
     except Exception:
         pass
-    digest = hashlib.sha256()
-    for relative in ("app/nlu.py", "config/nlu.yaml"):
-        path = os.path.join(ROOT, relative)
-        if os.path.exists(path):
-            with open(path, "rb") as stream:
-                digest.update(stream.read())
-    meta["config_sha256"] = digest.hexdigest()
     return meta
 
 

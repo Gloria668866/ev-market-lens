@@ -8,7 +8,6 @@
 产出：eval/reports/text2sql.json + .md
 """
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -22,7 +21,15 @@ try:
 except Exception:
     pass
 
-from eval.common import load_jsonl, result_set_equal, pct  # noqa: E402
+from eval.common import (  # noqa: E402
+    TEXT_HASH_SEMANTICS,
+    canonical_text_sha256,
+    load_jsonl,
+    pct,
+    result_set_equal,
+    text_file_manifest,
+    text_files_sha256,
+)
 from app.text2sql import (  # noqa: E402
     SYS,
     DOMAIN,
@@ -39,6 +46,10 @@ from app.graph import _validate_sql_shape                   # noqa: E402
 
 DATASET = os.path.join(ROOT, "eval", "datasets", "text2sql.jsonl")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
+CONFIG_INPUTS = (
+    os.path.join(ROOT, "app", "text2sql.py"),
+    os.path.join(ROOT, "config", "nlu.yaml"),
+)
 
 
 def _exec(sql):
@@ -133,7 +144,13 @@ def run(limit=None, max_retry=MAX_SQL_RETRY):
 
 def _build_meta() -> dict:
     """Evaluation metadata for reproducibility."""
-    meta = {"timestamp": datetime.now(timezone.utc).isoformat()}
+    meta = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "hash_semantics": TEXT_HASH_SEMANTICS,
+        "dataset_sha256": canonical_text_sha256(DATASET),
+        "config_files": text_file_manifest(CONFIG_INPUTS, root=ROOT),
+        "config_sha256": text_files_sha256(CONFIG_INPUTS, root=ROOT),
+    }
     try:
         meta["git_commit"] = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, cwd=ROOT).strip()
@@ -142,25 +159,8 @@ def _build_meta() -> dict:
         meta["dirty_worktree"] = bool(dirty)
     except Exception:
         pass
-    try:
-        with open(DATASET, "rb") as f:
-            meta["dataset_sha256"] = hashlib.sha256(f.read()).hexdigest()
-    except Exception:
-        pass
     meta["model"] = os.environ.get("LLM_MODEL", "unknown")
     meta["provider"] = os.environ.get("LLM_PROVIDER", "unknown")
-    try:
-        import hashlib as _h
-        config_files = [os.path.join(ROOT, "app", "text2sql.py"),
-                        os.path.join(ROOT, "config", "nlu.yaml")]
-        h = _h.sha256()
-        for cf in config_files:
-            if os.path.exists(cf):
-                with open(cf, "rb") as _f:
-                    h.update(_f.read())
-        meta["config_sha256"] = h.hexdigest()
-    except Exception:
-        pass
     try:
         from app.db import run_query
         _, rows = run_query("SELECT COUNT(*) c FROM fact_sales_rank")

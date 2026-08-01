@@ -120,9 +120,22 @@
   "_meta": {
     "timestamp": "2026-07-29T15:07:38.341656+00:00",
     "model": "deepseek-v4-flash",
-    "dataset_sha256": "e519008c1a46a6e1ab5e3dd727f69480eef494455120c912fca850a311b615f9",
+    "hash_semantics": "sha256-lf-v1",
+    "dataset_sha256": "cdf1e374d407cab93aecb0411127f1c2a713b5641c5ee36c1fec39696a498c71",
     "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
     "dirty_worktree": false,
-    "config_sha256": "40463ce4c6be1634d5fe1caf473e18c40e9cfa7c9df6728f50643f45ff022b8d"
+    "config_files": [
+      {
+        "path": "app/nlu.py",
+        "bytes": 27304,
+        "sha256": "092a5034e0b6ce46d543bfe8cbcd9c9adad31a13394084a5aa6654f5c168ad0b"
+      },
+      {
+        "path": "config/nlu.yaml",
+        "bytes": 7736,
+        "sha256": "fc35cb722bc4cebd114ac71f9cb1b8a306aadac9f49614d80fac7219bd59c8d8"
+      }
+    ],
+    "config_sha256": "26becda1d38794072688819a86c9a46c6d20d34f9b48b3aa8505069b204957c1"
   }
 }

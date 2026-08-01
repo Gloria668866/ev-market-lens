@@ -1,5 +1,5 @@
-"""评测工具单测：SQL 结果集等价比对（无序/列序无关/数值容差/有序）。"""
-from eval.common import result_set_equal
+"""评测公共工具单测。"""
+from eval.common import canonical_text_sha256, result_set_equal
 
 
 def test_equal_ignores_colname_and_roworder():
@@ -21,3 +21,12 @@ def test_ordered_flag():
     p = [{"a": 2}, {"a": 1}]
     assert result_set_equal(g, p)                  # 默认无序 → 相等
     assert not result_set_equal(g, p, ordered=True)  # 有序 → 不等
+
+
+def test_canonical_text_hash_is_stable_across_checkout_newlines(tmp_path):
+    lf = tmp_path / "lf.jsonl"
+    crlf = tmp_path / "crlf.jsonl"
+    lf.write_bytes(b'{"id": 1}\n{"id": 2}\n')
+    crlf.write_bytes(b'{"id": 1}\r\n{"id": 2}\r\n')
+
+    assert canonical_text_sha256(lf) == canonical_text_sha256(crlf)

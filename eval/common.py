@@ -3,8 +3,70 @@
 RAG 的当前公开评测实现位于 ``eval/rag_eval.py``。项目没有把自定义
 LLM 打分函数冒充 RAGAS 指标；答案级能力边界以生成报告为准。
 """
+import hashlib
 import json
 from collections import Counter
+from pathlib import Path
+from typing import Iterable
+
+TEXT_HASH_SEMANTICS = "sha256-lf-v1"
+
+
+def canonical_text_bytes(path: str | Path) -> bytes:
+    """Return text input bytes with checkout-specific newlines removed.
+
+    Git may materialise tracked text as LF on Linux and CRLF on Windows.  Raw
+    ``read_bytes()`` hashes therefore describe a checkout, not the committed
+    evaluation input.  Evaluation datasets/configuration are UTF-8 text, so
+    canonical LF bytes give both platforms the same digest while preserving
+    every other byte.
+    """
+    payload = Path(path).read_bytes()
+    return payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def canonical_text_sha256(path: str | Path) -> str:
+    return hashlib.sha256(canonical_text_bytes(path)).hexdigest()
+
+
+def json_sha256(value) -> str:
+    """Hash a JSON-compatible value using a deterministic encoding."""
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def text_file_manifest(
+    paths: Iterable[str | Path],
+    *,
+    root: str | Path,
+) -> list[dict]:
+    """Build a stable manifest for an ordered set of repository text files."""
+    root_path = Path(root).resolve()
+    files = []
+    for raw_path in paths:
+        path = Path(raw_path).resolve()
+        relative = path.relative_to(root_path).as_posix()
+        payload = canonical_text_bytes(path)
+        files.append({
+            "path": relative,
+            "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        })
+    return sorted(files, key=lambda item: item["path"])
+
+
+def text_files_sha256(
+    paths: Iterable[str | Path],
+    *,
+    root: str | Path,
+) -> str:
+    """Hash file names plus canonical contents without concat ambiguity."""
+    return json_sha256(text_file_manifest(paths, root=root))
 
 # ============================================================ SQL 结果集等价比对
 def _canon(v):

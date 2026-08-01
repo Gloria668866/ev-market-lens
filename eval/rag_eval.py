@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import subprocess
 import sys
@@ -32,6 +31,12 @@ except Exception:
 
 from app import config as app_config  # noqa: E402
 from app.rag import retrieve as retrieval  # noqa: E402
+from eval.common import (  # noqa: E402
+    TEXT_HASH_SEMANTICS,
+    canonical_text_bytes,
+    canonical_text_sha256,
+    json_sha256,
+)
 
 DATASET = ROOT / "eval" / "datasets" / "rag.jsonl"
 SEED_DIR = ROOT / "data" / "seed_kb"
@@ -141,21 +146,16 @@ def _load_seed_sources() -> dict[str, str]:
 def _seed_manifest() -> dict:
     files = []
     for path in sorted(SEED_DIR.glob("*.md")):
-        payload = path.read_bytes()
+        payload = canonical_text_bytes(path)
         files.append({
             "filename": path.name,
             "bytes": len(payload),
-            "sha256": hashlib.sha256(payload).hexdigest(),
+            "sha256": canonical_text_sha256(path),
         })
-    encoded = json.dumps(
-        files,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
     return {
         "file_count": len(files),
-        "sha256": hashlib.sha256(encoded).hexdigest(),
+        "hash_semantics": TEXT_HASH_SEMANTICS,
+        "sha256": json_sha256(files),
         "files": files,
     }
 
@@ -329,31 +329,37 @@ def _runtime_state(value: Any) -> str:
     return f"loaded:{value.__class__.__name__}"
 
 
+def _portable_model_id(configured: str) -> str:
+    """Return a model identifier without leaking checkout/container paths."""
+    normalised = str(configured or "unknown").strip().replace("\\", "/").rstrip("/")
+    return normalised.rsplit("/", 1)[-1] or "unknown"
+
+
+def _evaluation_config() -> dict:
+    return {
+        "backend": app_config.RAG_BACKEND,
+        "embedding": {
+            "model_name": _portable_model_id(app_config.EMBED_MODEL_NAME),
+            "model_version": app_config.EMBED_MODEL_VERSION,
+            "dimension": app_config.EMBED_DIM,
+            "max_tokens": app_config.EMBED_MAX_TOKENS,
+        },
+        "reranker": {
+            "model_name": _portable_model_id(app_config.RERANK_MODEL_NAME),
+        },
+        "retrieval": {
+            key: getattr(app_config, key) for key in _RETRIEVAL_CONFIG_KEYS
+        },
+    }
+
+
 def _evaluation_meta(
     *,
     user_id: int,
     reranker_flags: list[bool],
 ) -> dict:
-    retrieval_config = {
-        key: getattr(app_config, key) for key in _RETRIEVAL_CONFIG_KEYS
-    }
-    evaluation_config = {
-        "backend": app_config.RAG_BACKEND,
-        "embedding": {
-            "model_name": app_config.EMBED_MODEL_NAME,
-            "model_version": app_config.EMBED_MODEL_VERSION,
-            "dimension": app_config.EMBED_DIM,
-            "max_tokens": app_config.EMBED_MAX_TOKENS,
-        },
-        "reranker": {"model_name": app_config.RERANK_MODEL_NAME},
-        "retrieval": retrieval_config,
-    }
-    config_payload = json.dumps(
-        evaluation_config,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    evaluation_config = _evaluation_config()
+    retrieval_config = evaluation_config["retrieval"]
     local = app_config.RAG_BACKEND == "local"
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -373,21 +379,23 @@ def _evaluation_meta(
             "merge_parents",
         ],
         "embedding": {
-            "model_name": app_config.EMBED_MODEL_NAME,
+            "model_name": evaluation_config["embedding"]["model_name"],
             "model_version": app_config.EMBED_MODEL_VERSION,
             "dimension": app_config.EMBED_DIM,
             "max_tokens": app_config.EMBED_MAX_TOKENS,
             "runtime": _runtime_state(retrieval.embed._model),
         },
         "reranker": {
-            "model_name": app_config.RERANK_MODEL_NAME,
+            "model_name": evaluation_config["reranker"]["model_name"],
             "runtime": _runtime_state(retrieval.embed._reranker),
             "used_for_all_questions": bool(reranker_flags)
             and all(reranker_flags),
         },
         "retrieval_config": retrieval_config,
-        "evaluation_config_sha256": hashlib.sha256(config_payload).hexdigest(),
-        "dataset_sha256": hashlib.sha256(DATASET.read_bytes()).hexdigest(),
+        "hash_semantics": TEXT_HASH_SEMANTICS,
+        "evaluation_config": evaluation_config,
+        "evaluation_config_sha256": json_sha256(evaluation_config),
+        "dataset_sha256": canonical_text_sha256(DATASET),
         "seed_corpus_manifest": _seed_manifest(),
         "scope": "retrieval_evidence_coverage_and_abstention_only",
         "does_not_measure": [
@@ -580,7 +588,8 @@ def to_markdown(report: dict) -> str:
         f"- reranker 全程启用：**{report['reranker_used']}**",
         f"- 后端披露：`{meta['backend_disclosure']}`",
         f"- Git：`{meta['git']['commit']}`，dirty={meta['git']['dirty']}",
-        f"- 种子 manifest：`{meta['seed_corpus_manifest']['sha256']}`",
+        "- 种子 manifest（SHA-256，LF canonical）："
+        f"`{meta['seed_corpus_manifest']['sha256']}`",
         "",
         "## 正例",
         "",

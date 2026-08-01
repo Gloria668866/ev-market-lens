@@ -121,8 +121,27 @@
   "_meta": {
     "timestamp": "2026-07-29T15:07:04.945730+00:00",
     "database": "bi_demo.db",
+    "source_scope": "local_snapshot",
+    "hash_semantics": "sha256-lf-v1",
     "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
     "dirty_worktree": false,
+    "repository_reproducible": false,
+    "source_disclosure": "This report evaluates a local data snapshot. The database and raw crawl are not committed, so a fresh clone cannot independently recompute this report.",
+    "snapshot_inputs": {
+      "database": {
+        "path": "bi_demo.db",
+        "tracked": false,
+        "available_when_reported": true,
+        "sha256": "cb48442878fe48ca4ab83050d9eb936f63eeed8a7ab1b75f193e710bbf87d9c2"
+      },
+      "raw_sales": {
+        "path": "data/raw/sales_rank_raw.jsonl",
+        "tracked": false,
+        "available_when_reported": true,
+        "sha256": "4fff409e45815419e72ff85031a1ad26821cf9137a700403424bb2657cce14b3"
+      }
+    },
+    "database_sha256": "cb48442878fe48ca4ab83050d9eb936f63eeed8a7ab1b75f193e710bbf87d9c2",
     "raw_sha256": "4fff409e45815419e72ff85031a1ad26821cf9137a700403424bb2657cce14b3"
   }
 }
