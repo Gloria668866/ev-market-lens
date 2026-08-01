@@ -341,12 +341,15 @@ stage / intent / sql / rows / chart / collection / insight / citation / done / e
 | Text2SQL | 执行结果集等价比较 | 固定 60 题回归集 60/60；首轮与重试明细见提交报告 |
 | Intent | 110 条五分类固定回归集、混淆矩阵、per-class P/R/F1、调用与延迟统计 | 当前 110/110；固定集 0 次 LLM 调用、零调用率 100%，延迟分位见提交报告；不覆盖新问题的 LLM 兜底泛化 |
 | RAG | 检索、rerank、证据门控、父块归并、人工原子 claim 支持与负样本拒答 | 本地 SQLite + numpy：13/13 正样本严格通过；claim 来源、归并上下文、关键锚点支持率均为 100%；7/7 负样本拒答 |
-| Data quality | 表行数、非空、枚举、唯一键、外键等断言 | 以当前报告为准 |
+| Data quality | 表行数、非空、枚举、唯一键、外键等断言 | 报告绑定本地 DB/raw 快照哈希；输入未入 Git，不是 clone 后离线复现 |
 | Tests | pytest 与前端 build | 不在文档硬编码测试数量 |
 
 当前 RAG 报告只证明“小样本中目标证据能召回、原子 claim 在指定来源和归并上下文中有支持，且无证据问题能拒答”。评测运行在本地 SQLite + numpy 后端，没有运行答案生成 faithfulness/correctness judge，也没有验证生产 PostgreSQL + pgvector，不能写成 RAG 最终答案质量或生产准确率。
 
 评测脚本是项目内的确定性/自定义实现，不宣称直接使用当前代码并未调用的第三方评测框架。
+Intent、Text2SQL 与 RAG 报告的输入哈希使用跨平台统一的 LF 内容语义，CI 会重算
+dataset/config/seed manifest 并验证报告提交是当前 HEAD 的祖先。数据质量报告只作为
+带 DB/raw 哈希的本地快照证据，不把未提交的大文件包装成仓库自带数据。
 
 ## 11. 生产拓扑与当前状态
 

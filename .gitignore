@@ -36,12 +36,11 @@ data/probe/*.json
 data/probe/*.html
 data/probe/*.txt
 
-# ===== Node（docx 生成用全局安装的 docx）=====
+# ===== Node / 前端 =====
 node_modules/
 
 # ===== 前端构建产物 =====
 frontend/dist/
-phone/dist/
 
 # ===== 渲染中间产物 =====
 *.pdf
