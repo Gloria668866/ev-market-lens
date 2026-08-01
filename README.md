@@ -159,8 +159,15 @@ py -3.12 -m venv .venv
 Copy-Item .env.example .env
 # 填写 .env，并将 BGE embedding/reranker 权重放入 models/
 npm --prefix frontend install
+.\.venv\Scripts\python.exe seed_real.py
+.\.venv\Scripts\python.exe data\build_local_kb.py
 powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 ```
+
+`bi_demo.db`、本地向量库和模型权重不提交到 Git。上面两条初始化命令必须在
+第一次启动前执行，否则深度健康检查会按设计拒绝启动“只有页面、没有数据”的演示。
+`seed_real.py` 生成的是确定性合成销量样例，仅用于验证 schema 和查询链路，不能
+作为市场结论或简历中的真实业务数据。
 
 默认地址：
 
@@ -174,16 +181,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-### 初始化演示数据
-
-零网络快速体验使用合成样例：
-
-```bash
-python seed_real.py
-python data/build_local_kb.py
-```
-
-`seed_real.py` 只保证 schema 和查询链路可演示，其中数值是确定性合成数据，不能作为市场结论或简历中的真实业务数据。
+### 更新真实销量数据
 
 真实销量数据使用公开 JSON API：
 

@@ -21,6 +21,7 @@ def test_deprecated_duplicate_entrypoints_are_absent():
         "data/rag_ingest_demo.py",
         "data/crawl_seed_corpus.py",
         "data/export_rag_corpus.py",
+        "data/backfill_local_embeddings.py",
         "data/probe/volume_probe.py",
         "data/probe/probe_koubei_detail.py",
         "data/probe/口碑车系详情字段清单.md",
