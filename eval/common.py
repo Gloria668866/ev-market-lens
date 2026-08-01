@@ -5,11 +5,21 @@ LLM 打分函数冒充 RAGAS 指标；答案级能力边界以生成报告为准
 """
 import hashlib
 import json
+import subprocess
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
 TEXT_HASH_SEMANTICS = "sha256-lf-v1"
+GENERATED_REPORT_PATHS = (
+    "eval/reports/data_quality.json",
+    "eval/reports/intent.json",
+    "eval/reports/intent.md",
+    "eval/reports/rag.json",
+    "eval/reports/rag.md",
+    "eval/reports/text2sql.json",
+    "eval/reports/text2sql.md",
+)
 
 
 def canonical_text_bytes(path: str | Path) -> bytes:
@@ -67,6 +77,55 @@ def text_files_sha256(
 ) -> str:
     """Hash file names plus canonical contents without concat ambiguity."""
     return json_sha256(text_file_manifest(paths, root=root))
+
+
+def evaluation_git_snapshot(root: str | Path) -> dict:
+    """Capture Git provenance while ignoring only generated reports.
+
+    The documented sequential workflow rewrites tracked reports before the
+    next evaluator starts.  Those known outputs must not make the next report
+    self-declare as dirty.  Exact top-level excludes keep source, dataset,
+    configuration, and unexpected files under ``eval/reports`` visible.
+    """
+    root_path = Path(root).resolve()
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if commit.returncode != 0:
+        raise RuntimeError("cannot resolve evaluation Git commit")
+
+    pathspecs = ["."] + [
+        f":(top,exclude){relative}" for relative in GENERATED_REPORT_PATHS
+    ]
+    status = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            *pathspecs,
+        ],
+        cwd=root_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if status.returncode != 0:
+        raise RuntimeError("cannot inspect evaluation Git worktree")
+    entries = [item for item in status.stdout.split("\0") if item]
+    return {
+        "commit": commit.stdout.strip(),
+        "dirty": bool(entries),
+        "dirty_path_count": len(entries),
+    }
 
 # ============================================================ SQL 结果集等价比对
 def _canon(v):

@@ -10,7 +10,6 @@ import collections
 import json
 import os
 import statistics
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -27,6 +26,7 @@ except Exception:
 from eval.common import (  # noqa: E402
     TEXT_HASH_SEMANTICS,
     canonical_text_sha256,
+    evaluation_git_snapshot,
     load_jsonl,
     pct,
     text_file_manifest,
@@ -38,8 +38,14 @@ LABELS = ["sql", "rag", "hybrid", "chat", "clarify"]
 DATASET = os.path.join(ROOT, "eval", "datasets", "intent.jsonl")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
 NLU_CONFIG = os.path.join(ROOT, "config", "nlu.yaml")
-CONFIG_INPUTS = (
+IMPLEMENTATION_INPUTS = (
+    os.path.join(ROOT, "eval", "intent_eval.py"),
+    os.path.join(ROOT, "eval", "common.py"),
+    os.path.join(ROOT, "app", "graph.py"),
     os.path.join(ROOT, "app", "nlu.py"),
+    os.path.join(ROOT, "app", "llm.py"),
+    os.path.join(ROOT, "app", "rag", "embed.py"),
+    os.path.join(ROOT, "app", "config.py"),
     NLU_CONFIG,
 )
 
@@ -50,20 +56,19 @@ def _build_meta() -> dict:
         "model": os.environ.get("LLM_MODEL", "unknown"),
         "hash_semantics": TEXT_HASH_SEMANTICS,
         "dataset_sha256": canonical_text_sha256(DATASET),
-        "config_files": text_file_manifest(CONFIG_INPUTS, root=ROOT),
-        "config_sha256": text_files_sha256(CONFIG_INPUTS, root=ROOT),
+        "implementation_manifest": text_file_manifest(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
+        "implementation_sha256": text_files_sha256(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
     }
     try:
-        meta["git_commit"] = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            cwd=ROOT,
-            text=True,
-        ).strip()
-        meta["dirty_worktree"] = bool(subprocess.check_output(
-            ["git", "status", "--porcelain"],
-            cwd=ROOT,
-            text=True,
-        ).strip())
+        snapshot = evaluation_git_snapshot(ROOT)
+        meta["git_commit"] = snapshot["commit"]
+        meta["dirty_worktree"] = snapshot["dirty"]
     except Exception:
         pass
     return meta

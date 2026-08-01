@@ -157,38 +157,60 @@ def test_report_provenance_gate(name, meta_path, commit_path, dirty_path):
 
 
 @pytest.mark.parametrize(
-    ("name", "meta_path", "dataset", "config_inputs"),
+    ("name", "meta_path", "dataset", "implementation_inputs"),
     [
         (
             "intent.json",
             ("_meta",),
             "eval/datasets/intent.jsonl",
-            ("app/nlu.py", "config/nlu.yaml"),
+            (
+                "eval/intent_eval.py",
+                "eval/common.py",
+                "app/graph.py",
+                "app/nlu.py",
+                "app/llm.py",
+                "app/rag/embed.py",
+                "app/config.py",
+                "config/nlu.yaml",
+            ),
         ),
         (
             "text2sql.json",
             ("meta",),
             "eval/datasets/text2sql.jsonl",
-            ("app/text2sql.py", "config/nlu.yaml"),
+            (
+                "eval/text2sql_eval.py",
+                "eval/common.py",
+                "app/text2sql.py",
+                "app/schema_linking.py",
+                "app/sql_guard.py",
+                "app/db.py",
+                "app/graph.py",
+                "app/llm.py",
+                "app/config.py",
+                "config/nlu.yaml",
+            ),
         ),
     ],
 )
 def test_text_evaluation_input_hashes_are_current(
-    name, meta_path, dataset, config_inputs
+    name, meta_path, dataset, implementation_inputs
 ):
     """不能只检查“像 SHA”；必须由当前仓库输入实际重算。"""
     meta = _val(_load(name), *meta_path)
     dataset_path = ROOT_PATH / dataset
-    config_paths = [ROOT_PATH / relative for relative in config_inputs]
+    implementation_paths = [
+        ROOT_PATH / relative for relative in implementation_inputs
+    ]
 
     assert _val(meta, "hash_semantics") == TEXT_HASH_SEMANTICS
     assert _val(meta, "dataset_sha256") == canonical_text_sha256(dataset_path)
-    assert _val(meta, "config_files") == text_file_manifest(
-        config_paths,
+    assert _val(meta, "implementation_manifest") == text_file_manifest(
+        implementation_paths,
         root=ROOT_PATH,
     )
-    assert _val(meta, "config_sha256") == text_files_sha256(
-        config_paths,
+    assert _val(meta, "implementation_sha256") == text_files_sha256(
+        implementation_paths,
         root=ROOT_PATH,
     )
 
@@ -207,6 +229,26 @@ def test_rag_evaluation_input_hashes_are_current():
     assert _val(meta, "evaluation_config") == evaluation_config
     assert _val(meta, "evaluation_config_sha256") == json_sha256(
         evaluation_config
+    )
+    implementation_paths = [
+        ROOT_PATH / relative
+        for relative in (
+            "eval/rag_eval.py",
+            "eval/common.py",
+            "app/rag/retrieve.py",
+            "app/rag/embed.py",
+            "app/rag/local_store.py",
+            "app/rag/text.py",
+            "app/config.py",
+        )
+    ]
+    assert _val(meta, "implementation_manifest") == text_file_manifest(
+        implementation_paths,
+        root=ROOT_PATH,
+    )
+    assert _val(meta, "implementation_sha256") == text_files_sha256(
+        implementation_paths,
+        root=ROOT_PATH,
     )
 
     seed_files = []
@@ -250,6 +292,18 @@ def test_data_quality_report_discloses_local_snapshot_boundary():
     meta = _val(_load("data_quality.json"), "_meta")
     assert _val(meta, "source_scope") == "local_snapshot"
     assert _val(meta, "hash_semantics") == TEXT_HASH_SEMANTICS
+    implementation_paths = [
+        ROOT_PATH / "eval/data_quality.py",
+        ROOT_PATH / "eval/common.py",
+    ]
+    assert _val(meta, "implementation_manifest") == text_file_manifest(
+        implementation_paths,
+        root=ROOT_PATH,
+    )
+    assert _val(meta, "implementation_sha256") == text_files_sha256(
+        implementation_paths,
+        root=ROOT_PATH,
+    )
 
     expected = {
         "database": ("bi_demo.db", False),
