@@ -16,6 +16,13 @@ import sys
 from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from eval.common import (  # noqa: E402
+    TEXT_HASH_SEMANTICS,
+    canonical_text_sha256,
+)
+
 DB = os.path.join(ROOT, "bi_demo.db")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
 
@@ -163,6 +170,8 @@ def _build_meta() -> dict:
     meta = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "database": os.path.basename(DB),
+        "source_scope": "local_snapshot",
+        "hash_semantics": TEXT_HASH_SEMANTICS,
     }
     try:
         meta["git_commit"] = subprocess.check_output(
@@ -178,9 +187,59 @@ def _build_meta() -> dict:
     except Exception:
         pass
     raw_path = os.path.join(ROOT, "data", "raw", "sales_rank_raw.jsonl")
-    if os.path.exists(raw_path):
-        with open(raw_path, "rb") as stream:
-            meta["raw_sha256"] = hashlib.sha256(stream.read()).hexdigest()
+    artifact_paths = {
+        "database": (DB, "bi_demo.db", False),
+        "raw_sales": (
+            raw_path,
+            "data/raw/sales_rank_raw.jsonl",
+            True,
+        ),
+    }
+    snapshot_inputs = {}
+    for name, (path, relative, is_text) in artifact_paths.items():
+        tracked = False
+        try:
+            tracked = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--", relative],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            ).returncode == 0
+        except Exception:
+            pass
+        item = {
+            "path": relative,
+            "tracked": tracked,
+            "available_when_reported": os.path.exists(path),
+        }
+        if os.path.exists(path):
+            if is_text:
+                item["sha256"] = canonical_text_sha256(path)
+            else:
+                with open(path, "rb") as stream:
+                    item["sha256"] = hashlib.sha256(stream.read()).hexdigest()
+        snapshot_inputs[name] = item
+
+    repository_reproducible = all(
+        item["tracked"] and item["available_when_reported"]
+        for item in snapshot_inputs.values()
+    )
+    meta["repository_reproducible"] = repository_reproducible
+    meta["source_disclosure"] = (
+        "This report evaluates a local data snapshot. The database and raw "
+        "crawl are not committed, so a fresh clone cannot independently "
+        "recompute this report."
+        if not repository_reproducible
+        else "All snapshot inputs are tracked and available in this checkout."
+    )
+    meta["snapshot_inputs"] = snapshot_inputs
+    database_sha = snapshot_inputs["database"].get("sha256")
+    if database_sha:
+        meta["database_sha256"] = database_sha
+    raw_sha = snapshot_inputs["raw_sales"].get("sha256")
+    if raw_sha:
+        meta["raw_sha256"] = raw_sha
     return meta
 
 

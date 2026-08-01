@@ -10,10 +10,23 @@
     "timestamp": "2026-07-29T15:14:09.728270+00:00",
     "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
     "dirty_worktree": false,
-    "dataset_sha256": "f4a954cdfe4b66500b56cbc243c8f3df3276bea664849cbf1db208512efaa1b9",
+    "hash_semantics": "sha256-lf-v1",
+    "dataset_sha256": "858e26e43c0e270db73b7e62cba02e9d1a9a79303e0cb4f57b2e4c295b32df56",
     "model": "deepseek-v4-flash",
     "provider": "unknown",
-    "config_sha256": "337e413d4d62c2ce8364826dca436e7719989b3115c39496798a443bedeed786",
+    "config_files": [
+      {
+        "path": "app/text2sql.py",
+        "bytes": 17983,
+        "sha256": "a275053f9dcd375729c12f6ab466415f32b31b282ff4b7c18c9f179f1cb1c07f"
+      },
+      {
+        "path": "config/nlu.yaml",
+        "bytes": 7736,
+        "sha256": "fc35cb722bc4cebd114ac71f9cb1b8a306aadac9f49614d80fac7219bd59c8d8"
+      }
+    ],
+    "config_sha256": "88842bf6d6a9268e80070e19fedd50f363455c727955460d541833e8c3b35623",
     "fact_rows": 8402
   },
   "rows": [
