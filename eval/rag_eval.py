@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import unicodedata
 from datetime import datetime, timezone
@@ -35,12 +34,24 @@ from eval.common import (  # noqa: E402
     TEXT_HASH_SEMANTICS,
     canonical_text_bytes,
     canonical_text_sha256,
+    evaluation_git_snapshot,
     json_sha256,
+    text_file_manifest,
+    text_files_sha256,
 )
 
 DATASET = ROOT / "eval" / "datasets" / "rag.jsonl"
 SEED_DIR = ROOT / "data" / "seed_kb"
 REPORT_DIR = ROOT / "eval" / "reports"
+IMPLEMENTATION_INPUTS = (
+    ROOT / "eval" / "rag_eval.py",
+    ROOT / "eval" / "common.py",
+    ROOT / "app" / "rag" / "retrieve.py",
+    ROOT / "app" / "rag" / "embed.py",
+    ROOT / "app" / "rag" / "local_store.py",
+    ROOT / "app" / "rag" / "text.py",
+    ROOT / "app" / "config.py",
+)
 
 _RETRIEVAL_CONFIG_KEYS = (
     "RECALL_VEC_K",
@@ -300,25 +311,7 @@ def evaluate_claim_evidence(
 
 
 def _git_snapshot() -> dict:
-    def _git(*args: str) -> str:
-        proc = subprocess.run(
-            ["git", *args],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        return proc.stdout.strip() if proc.returncode == 0 else ""
-
-    status_lines = [
-        line for line in _git("status", "--porcelain").splitlines() if line
-    ]
-    return {
-        "commit": _git("rev-parse", "HEAD") or "unknown",
-        "dirty": bool(status_lines),
-        "dirty_path_count": len(status_lines),
-    }
+    return evaluation_git_snapshot(ROOT)
 
 
 def _runtime_state(value: Any) -> str:
@@ -395,6 +388,14 @@ def _evaluation_meta(
         "hash_semantics": TEXT_HASH_SEMANTICS,
         "evaluation_config": evaluation_config,
         "evaluation_config_sha256": json_sha256(evaluation_config),
+        "implementation_manifest": text_file_manifest(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
+        "implementation_sha256": text_files_sha256(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
         "dataset_sha256": canonical_text_sha256(DATASET),
         "seed_corpus_manifest": _seed_manifest(),
         "scope": "retrieval_evidence_coverage_and_abstention_only",

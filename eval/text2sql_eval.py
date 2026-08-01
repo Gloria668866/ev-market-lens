@@ -10,7 +10,6 @@
 import argparse
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -24,6 +23,7 @@ except Exception:
 from eval.common import (  # noqa: E402
     TEXT_HASH_SEMANTICS,
     canonical_text_sha256,
+    evaluation_git_snapshot,
     load_jsonl,
     pct,
     result_set_equal,
@@ -46,8 +46,16 @@ from app.graph import _validate_sql_shape                   # noqa: E402
 
 DATASET = os.path.join(ROOT, "eval", "datasets", "text2sql.jsonl")
 REPORT_DIR = os.path.join(ROOT, "eval", "reports")
-CONFIG_INPUTS = (
+IMPLEMENTATION_INPUTS = (
+    os.path.join(ROOT, "eval", "text2sql_eval.py"),
+    os.path.join(ROOT, "eval", "common.py"),
     os.path.join(ROOT, "app", "text2sql.py"),
+    os.path.join(ROOT, "app", "schema_linking.py"),
+    os.path.join(ROOT, "app", "sql_guard.py"),
+    os.path.join(ROOT, "app", "db.py"),
+    os.path.join(ROOT, "app", "graph.py"),
+    os.path.join(ROOT, "app", "llm.py"),
+    os.path.join(ROOT, "app", "config.py"),
     os.path.join(ROOT, "config", "nlu.yaml"),
 )
 
@@ -148,15 +156,19 @@ def _build_meta() -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hash_semantics": TEXT_HASH_SEMANTICS,
         "dataset_sha256": canonical_text_sha256(DATASET),
-        "config_files": text_file_manifest(CONFIG_INPUTS, root=ROOT),
-        "config_sha256": text_files_sha256(CONFIG_INPUTS, root=ROOT),
+        "implementation_manifest": text_file_manifest(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
+        "implementation_sha256": text_files_sha256(
+            IMPLEMENTATION_INPUTS,
+            root=ROOT,
+        ),
     }
     try:
-        meta["git_commit"] = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, cwd=ROOT).strip()
-        dirty = subprocess.check_output(
-            ["git", "status", "--porcelain"], text=True, cwd=ROOT).strip()
-        meta["dirty_worktree"] = bool(dirty)
+        snapshot = evaluation_git_snapshot(ROOT)
+        meta["git_commit"] = snapshot["commit"]
+        meta["dirty_worktree"] = snapshot["dirty"]
     except Exception:
         pass
     meta["model"] = os.environ.get("LLM_MODEL", "unknown")
