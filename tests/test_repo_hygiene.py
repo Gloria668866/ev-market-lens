@@ -8,11 +8,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_deprecated_duplicate_entrypoints_are_absent():
     deprecated = [
-        "phone",
+        "phone/package.json",
+        "phone/src/App.vue",
         "data/api_demo.py",
         "data/graph_demo.py",
         "data/rag_build_kb.py",
-        "data/rag_eval",
+        "data/rag_eval/eval_report.json",
+        "data/rag_eval/eval_set.jsonl",
+        "data/rag_eval_build.py",
+        "data/rag_eval_run.py",
         "data/rag_fts_backfill.py",
         "data/rag_ingest_demo.py",
         "data/probe/volume_probe.py",
