@@ -1,6 +1,6 @@
-// 生产默认同源（"" → /api，由 Caddy 反代）；开发未配置时才回退到 localhost:8000。
+// 生产默认同源（"" → /api，由 Caddy 反代）；开发默认匹配 scripts/start-dev.ps1 的 8001。
 // 不能用 `|| localhost`：Docker 有意注入空字符串时会被误判，导致线上浏览器请求访客自己的 localhost。
-const DEFAULT_API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
+const DEFAULT_API_BASE = import.meta.env.DEV ? 'http://localhost:8001' : ''
 export const API_BASE = (import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE).replace(/\/$/, '')
 
 // 'mock' = 用本地 mock（后端未就绪）；'live' = 连真后端。

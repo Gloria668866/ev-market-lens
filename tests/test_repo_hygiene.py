@@ -19,9 +19,16 @@ def test_deprecated_duplicate_entrypoints_are_absent():
         "data/rag_eval_run.py",
         "data/rag_fts_backfill.py",
         "data/rag_ingest_demo.py",
+        "data/crawl_seed_corpus.py",
+        "data/export_rag_corpus.py",
         "data/probe/volume_probe.py",
         "data/probe/probe_koubei_detail.py",
         "data/probe/口碑车系详情字段清单.md",
+        "frontend/src/layouts/MobileLayout.vue",
+        "frontend/src/views/MobileChat.vue",
+        "frontend/src/views/MobileHome.vue",
+        "frontend/src/composables/useHotkeys.js",
+        "frontend/src/composables/useIsMobile.js",
     ]
 
     present = [path for path in deprecated if (ROOT / path).exists()]

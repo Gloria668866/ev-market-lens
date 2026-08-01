@@ -6,19 +6,20 @@
 
 ```bash
 cd frontend
-cp .env.example .env      # 首次：生成本地配置（默认 mock 数据源）
 npm install
-npm run dev               # http://localhost:5173
+npm run dev               # http://localhost:5173，默认连接 localhost:8001
 ```
 
-打开后在空状态点任意示例问题即可看到「思考过程 → 图表卡 + 结论」或「带引用的答案」。
+先从仓库根目录运行 `scripts/start-dev.ps1` 启动完整演示。只调前端且不启动
+后端时，可复制 `.env.example` 为 `.env`，再把 `VITE_DATA_SOURCE` 改为 `mock`。
 
 ## 连真后端
 
-后端（`app/main.py`，默认 `:8000`）就绪后，把 `.env` 改成：
+项目启动脚本默认把后端运行在 `:8001`。不创建 `.env` 时，Vite 开发模式也会
+直接使用这个地址；如需覆盖，创建 `.env`：
 
 ```ini
-VITE_API_BASE=http://localhost:8000
+VITE_API_BASE=http://localhost:8001
 VITE_DATA_SOURCE=live
 ```
 

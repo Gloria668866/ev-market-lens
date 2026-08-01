@@ -24,7 +24,7 @@ bi_demo.db
 data/raw/*
 !data/raw/.gitkeep
 
-# ===== RAG 语料候选（用 data/export_rag_corpus.py 可重新生成，体积大）=====
+# ===== RAG 语料候选（用 data/crawl_koubei.py --export-rag 可重新生成，体积大）=====
 data/rag_corpus/
 
 # ===== 本地 Embedding 模型权重（BGE-large-zh ~1.3GB，从 ModelScope/HF 下载）=====
