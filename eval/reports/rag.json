@@ -1447,9 +1447,9 @@
     }
   ],
   "_meta": {
-    "timestamp": "2026-07-29T15:09:33.115745+00:00",
+    "timestamp": "2026-08-01T11:08:13.109002+00:00",
     "git": {
-      "commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+      "commit": "efc3b544baf757d77bcbc63880fcb672682c7292",
       "dirty": false,
       "dirty_path_count": 0
     },
@@ -1508,6 +1508,44 @@
       }
     },
     "evaluation_config_sha256": "18e498ee0206c4aa53f53cf7a74fc146ba1af8bbb46ab2eed8e974ad4e5f7fa1",
+    "implementation_manifest": [
+      {
+        "path": "app/config.py",
+        "bytes": 8371,
+        "sha256": "fdecfb7a586af3b0eec2f8b06ca1f9a52061d0635fe01e2f734f481e7929c991"
+      },
+      {
+        "path": "app/rag/embed.py",
+        "bytes": 5934,
+        "sha256": "39c9195bdf72cf6db3669a79363b6ef6aba6094b7751f439225716e4a93f77dc"
+      },
+      {
+        "path": "app/rag/local_store.py",
+        "bytes": 15814,
+        "sha256": "525fe893115d6f3c77facf1090836e01126411da93ea53d950c7473ca6797cf2"
+      },
+      {
+        "path": "app/rag/retrieve.py",
+        "bytes": 14416,
+        "sha256": "f45c03fef3244ec5cd0cbae6696e3e3913d343cda3e27a5c567f528072d72d55"
+      },
+      {
+        "path": "app/rag/text.py",
+        "bytes": 1484,
+        "sha256": "93ad091b082821ca3e2483774e0fabb029a403a695f16b8cc9641ae9202323a8"
+      },
+      {
+        "path": "eval/common.py",
+        "bytes": 5818,
+        "sha256": "d801c5a478dfb0d98e712e7fae0c69f76db8607f6c3dda759d8d74738434f3ea"
+      },
+      {
+        "path": "eval/rag_eval.py",
+        "bytes": 25316,
+        "sha256": "4ef76047273ade49c35d82415814205e4c26246829ab880ef7e4f43c6033e525"
+      }
+    ],
+    "implementation_sha256": "1349840c72247e461c21dc007ffaee2b397c0ea5aad7a425866122d74df4dbbd",
     "dataset_sha256": "4ea118680a76ae113df89fe85bce5c69958e0c615a97197f86eb0c2abdbbe443",
     "seed_corpus_manifest": {
       "file_count": 8,
