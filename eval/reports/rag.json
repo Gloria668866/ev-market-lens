@@ -1447,9 +1447,9 @@
     }
   ],
   "_meta": {
-    "timestamp": "2026-07-29T15:09:33.115745+00:00",
+    "timestamp": "2026-08-01T11:08:13.109002+00:00",
     "git": {
-      "commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+      "commit": "efc3b544baf757d77bcbc63880fcb672682c7292",
       "dirty": false,
       "dirty_path_count": 0
     },
@@ -1463,14 +1463,14 @@
       "merge_parents"
     ],
     "embedding": {
-      "model_name": "D:\\bi-agent\\models\\bge-large-zh-v1.5",
+      "model_name": "bge-large-zh-v1.5",
       "model_version": "bge-large-zh-v1.5",
       "dimension": 1024,
       "max_tokens": 512,
       "runtime": "loaded:SentenceTransformer"
     },
     "reranker": {
-      "model_name": "D:\\bi-agent\\models\\bge-reranker-base",
+      "model_name": "bge-reranker-base",
       "runtime": "loaded:CrossEncoder",
       "used_for_all_questions": true
     },
@@ -1484,51 +1484,113 @@
       "CONTEXT_TOKEN_BUDGET": 3000,
       "MAX_PARENTS": 5
     },
-    "evaluation_config_sha256": "9e9a49d504ee7745de07db7ffbbc73ab66be5de2916cb5258dc4311560a14aa2",
-    "dataset_sha256": "249be47f01e4b2d5550a7742ce7e9b1d6090b3038c401cb8f371745bf2c7bdf4",
+    "hash_semantics": "sha256-lf-v1",
+    "evaluation_config": {
+      "backend": "local",
+      "embedding": {
+        "model_name": "bge-large-zh-v1.5",
+        "model_version": "bge-large-zh-v1.5",
+        "dimension": 1024,
+        "max_tokens": 512
+      },
+      "reranker": {
+        "model_name": "bge-reranker-base"
+      },
+      "retrieval": {
+        "RECALL_VEC_K": 20,
+        "RECALL_KW_K": 20,
+        "RRF_K": 60,
+        "RRF_FALLBACK_SCORE_MIN": 0.02,
+        "RERANK_TOP_K": 8,
+        "RERANK_SCORE_MIN": 0.2,
+        "CONTEXT_TOKEN_BUDGET": 3000,
+        "MAX_PARENTS": 5
+      }
+    },
+    "evaluation_config_sha256": "18e498ee0206c4aa53f53cf7a74fc146ba1af8bbb46ab2eed8e974ad4e5f7fa1",
+    "implementation_manifest": [
+      {
+        "path": "app/config.py",
+        "bytes": 8371,
+        "sha256": "fdecfb7a586af3b0eec2f8b06ca1f9a52061d0635fe01e2f734f481e7929c991"
+      },
+      {
+        "path": "app/rag/embed.py",
+        "bytes": 5934,
+        "sha256": "39c9195bdf72cf6db3669a79363b6ef6aba6094b7751f439225716e4a93f77dc"
+      },
+      {
+        "path": "app/rag/local_store.py",
+        "bytes": 15814,
+        "sha256": "525fe893115d6f3c77facf1090836e01126411da93ea53d950c7473ca6797cf2"
+      },
+      {
+        "path": "app/rag/retrieve.py",
+        "bytes": 14416,
+        "sha256": "f45c03fef3244ec5cd0cbae6696e3e3913d343cda3e27a5c567f528072d72d55"
+      },
+      {
+        "path": "app/rag/text.py",
+        "bytes": 1484,
+        "sha256": "93ad091b082821ca3e2483774e0fabb029a403a695f16b8cc9641ae9202323a8"
+      },
+      {
+        "path": "eval/common.py",
+        "bytes": 5818,
+        "sha256": "d801c5a478dfb0d98e712e7fae0c69f76db8607f6c3dda759d8d74738434f3ea"
+      },
+      {
+        "path": "eval/rag_eval.py",
+        "bytes": 25316,
+        "sha256": "4ef76047273ade49c35d82415814205e4c26246829ab880ef7e4f43c6033e525"
+      }
+    ],
+    "implementation_sha256": "1349840c72247e461c21dc007ffaee2b397c0ea5aad7a425866122d74df4dbbd",
+    "dataset_sha256": "4ea118680a76ae113df89fe85bce5c69958e0c615a97197f86eb0c2abdbbe443",
     "seed_corpus_manifest": {
       "file_count": 8,
-      "sha256": "35b29e2b740ad5924a96f6bc57bf4037fdbaec21fd0729f17580039e31cfa6bb",
+      "hash_semantics": "sha256-lf-v1",
+      "sha256": "a531706152ce4e75763eac773b8e6bcc8399354114248fe3b879038fcda4f555",
       "files": [
         {
           "filename": "2025中国新能源汽车市场年度综述.md",
-          "bytes": 2230,
-          "sha256": "cabc5f3ac4319a2853632873431eaa8c3208aab84e10bea517e725ae673c3768"
+          "bytes": 2207,
+          "sha256": "081123b948fdaa0f1d7161ec71a4146981ab283463c2b6e452a5f9aab5d83cef"
         },
         {
           "filename": "2025新能源价格战与价位段格局.md",
-          "bytes": 1790,
-          "sha256": "6ca83ac3ef1cb6ee7e46319565ffa5bee6ab453ba5e6ca5a95157026c478f449"
+          "bytes": 1771,
+          "sha256": "2b96d43847fdc5b15862344a8978019f465bf52469a9ec5ac3f69ce52d212235"
         },
         {
           "filename": "主流车企新能源竞争力盘点.md",
-          "bytes": 1938,
-          "sha256": "86efbc0a4b0e978aa85f4bae48e0c44380322b8d29e5f02e07bd46b1983286f1"
+          "bytes": 1907,
+          "sha256": "c162d8e737bfca25856b4c0688880edac277e0ea732285beeac6a345aa7b6c39"
         },
         {
           "filename": "主流车系用户口碑综述.md",
-          "bytes": 1897,
-          "sha256": "e3f972a75b708a57017a8d66eba2b320b81f0bac6934d509287f55a997b720e7"
+          "bytes": 1877,
+          "sha256": "59ae3943a4ec0f2b55fd37d7e12d5a13c3db895d1bcd46b09f48167554f8ea28"
         },
         {
           "filename": "新能源汽车出口与全球化.md",
-          "bytes": 1720,
-          "sha256": "987e8f84502e95da8e021fe1cbfa89cdb0939a0cdff95b814b0cfc639bd9d3e1"
+          "bytes": 1700,
+          "sha256": "e7cc8cffe03f3269da2f58b96984754d2bec73a3f6a3384797ecb04e1013a20c"
         },
         {
           "filename": "新能源汽车购置税与补贴政策.md",
-          "bytes": 1994,
-          "sha256": "8988a8f37e00dd6255aec96fdc668f51bf0fdcc8e1d54c3db740062d72f83137"
+          "bytes": 1969,
+          "sha256": "4705ce265d51b984bcbad0df6d1b6e71cd3fb8c13c11232cf32ae92c599a1cf2"
         },
         {
           "filename": "智能驾驶与智能座舱趋势.md",
-          "bytes": 1697,
-          "sha256": "0d6f868c67b9566561e59e86d6c06ef401ff282b9035d220b254f373f17c0e48"
+          "bytes": 1675,
+          "sha256": "84440d65c60c1c996cf41433d66e0809c4b550bb08b65b73d0d04da5241b3a90"
         },
         {
           "filename": "纯电插混增程技术路线对比.md",
-          "bytes": 2108,
-          "sha256": "f9932035e82a77b47b3b7a3bfa764c32fc520513ea0a2baebcb93cbe1eb2da57"
+          "bytes": 2081,
+          "sha256": "af7390ff1a839b06b2a089e843094b39adf183599cc5ad6f737c07de81bf360b"
         }
       ]
     },

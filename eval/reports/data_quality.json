@@ -119,10 +119,42 @@
     }
   ],
   "_meta": {
-    "timestamp": "2026-07-29T15:07:04.945730+00:00",
+    "timestamp": "2026-08-01T11:08:25.610473+00:00",
     "database": "bi_demo.db",
-    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
+    "source_scope": "local_snapshot",
+    "hash_semantics": "sha256-lf-v1",
+    "implementation_manifest": [
+      {
+        "path": "eval/common.py",
+        "bytes": 5818,
+        "sha256": "d801c5a478dfb0d98e712e7fae0c69f76db8607f6c3dda759d8d74738434f3ea"
+      },
+      {
+        "path": "eval/data_quality.py",
+        "bytes": 10850,
+        "sha256": "77e4ac6a66ec8037dfbf12e94744ffc6e4eafce46892b807605858dfe659543c"
+      }
+    ],
+    "implementation_sha256": "d931b72b2606f2950396fb141b670ab2b846c12b00e56268b22f9e690bfb0324",
+    "git_commit": "efc3b544baf757d77bcbc63880fcb672682c7292",
     "dirty_worktree": false,
+    "repository_reproducible": false,
+    "source_disclosure": "This report evaluates a local data snapshot. The database and raw crawl are not committed, so a fresh clone cannot independently recompute this report.",
+    "snapshot_inputs": {
+      "database": {
+        "path": "bi_demo.db",
+        "tracked": false,
+        "available_when_reported": true,
+        "sha256": "cb48442878fe48ca4ab83050d9eb936f63eeed8a7ab1b75f193e710bbf87d9c2"
+      },
+      "raw_sales": {
+        "path": "data/raw/sales_rank_raw.jsonl",
+        "tracked": false,
+        "available_when_reported": true,
+        "sha256": "4fff409e45815419e72ff85031a1ad26821cf9137a700403424bb2657cce14b3"
+      }
+    },
+    "database_sha256": "cb48442878fe48ca4ab83050d9eb936f63eeed8a7ab1b75f193e710bbf87d9c2",
     "raw_sha256": "4fff409e45815419e72ff85031a1ad26821cf9137a700403424bb2657cce14b3"
   }
 }

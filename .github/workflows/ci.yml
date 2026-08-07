@@ -28,6 +28,22 @@ jobs:
           LLM_API_KEY: dummy   # 仅供 import 通过，单测不真调 LLM
         run: python -m pytest tests/ -m "not integration" -q
 
+  frontend-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 安装前端依赖
+        run: npm --prefix frontend ci
+      - name: 前端数据契约测试
+        run: npm --prefix frontend test
+      - name: 前端生产构建
+        run: npm --prefix frontend run build
+
   # 当前仓库提交的 RAG 门禁是：strict retrieval（严格检索通过率）与
   # abstention（负例拒答率），不是 RAGAS faithfulness。Text2SQL 执行准确率、
   # 意图准确率与 data_quality 全通过状态也读取已提交报告。
@@ -38,7 +54,7 @@ jobs:
   # ---- 运维侧：构建镜像（验证 Dockerfile 可构建；可选推 GHCR）----
   # 仅在推 main 时跑（构建含 torch 较慢）；测试通过才构建。
   build-images:
-    needs: unit-tests
+    needs: [unit-tests, frontend-contracts]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

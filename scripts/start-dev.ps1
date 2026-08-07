@@ -43,6 +43,9 @@ $python = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) {
     throw "Missing .venv. Create it and install requirements.txt first."
 }
+if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend\node_modules"))) {
+    throw "Missing frontend/node_modules. Run npm --prefix frontend install first."
+}
 
 if (-not (Test-Listening $BackendPort)) {
     $backend = Start-Process -FilePath $python `
@@ -57,11 +60,15 @@ if (-not (Test-Listening $BackendPort)) {
     }
 }
 
-$health = Wait-Http "http://127.0.0.1:$BackendPort/health?deep=true"
-
-if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot "frontend\node_modules"))) {
-    throw "Missing frontend/node_modules. Run npm --prefix frontend install first."
+try {
+    $health = Wait-Http "http://127.0.0.1:$BackendPort/health?deep=true"
+} catch {
+    if ($started.backend.pid) {
+        Stop-Process -Id $started.backend.pid -Force -ErrorAction SilentlyContinue
+    }
+    throw
 }
+
 if (-not (Test-Listening $FrontendPort)) {
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
     $frontend = Start-Process -FilePath $npm `

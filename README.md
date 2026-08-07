@@ -127,16 +127,19 @@ Code Agent 只调用预定义采集工具，不执行其自行生成的代码。
 
 因此它是“异步研究补充”，不是无人值守的事实库自动修复。
 
-## 可复现评测
+## 评测与证据
 
 | 评测 | 当前证据 | 诚实边界 |
 |---|---|---|
-| Text2SQL | 固定 60 题执行结果等价回归集 60/60；首轮与重试明细以提交报告为准 | 固定集通过不等于未知问法 100% 泛化 |
+| Text2SQL | 2026-08-01 当前模型实跑 59/60（98.3%）；唯一失败及首轮/重试明细以提交报告为准 | 固定集结果不等于未知问法泛化率；不隐藏失败样本 |
 | 意图路由 | 110 条五分类固定回归集 110/110；固定集全部命中确定性规则，0 次 LLM 调用；延迟分位以提交报告为准 | 这是常见路由防回归，不是线上泛化率；该集合未衡量新问题的 LLM 兜底准确率 |
 | RAG | 本地 SQLite + numpy 确定性评测：13/13 正样本严格通过，claim 来源有效率、归并上下文支持率、关键锚点支持率均为 100%；7/7 负样本拒答 | 未验证最终生成答案 faithfulness/correctness，也未验证生产 PG 检索 |
-| 数据质量 | 表结构、非空、枚举、唯一键、外键等确定性断言 | 以当前 `eval/reports/data_quality.json` 为准 |
+| 数据质量 | 表结构、非空、枚举、唯一键、外键等确定性断言 | 当前报告绑定本地真实 DB/raw 快照哈希；原始快照未入 Git，因此属于可追溯本地证据，不是 clone 后离线复现 |
 
-评测脚本位于 [`eval/`](eval/)。自动化测试数量不在 README 固定写死，以实际命令和 CI 报告为准。
+评测脚本位于 [`eval/`](eval/)。Intent、Text2SQL 与 RAG 的固定输入随仓库提交；
+报告门禁会重算输入哈希并校验报告提交属于当前 HEAD 的祖先。数据质量报告则必须
+明确标记为本地快照，并记录 DB/raw 哈希，不能冒充仓库自带数据。自动化测试数量
+不在 README 固定写死，以实际命令和 CI 报告为准。
 
 ```bash
 python -m pytest tests/ -m "not integration" -q
@@ -156,8 +159,15 @@ py -3.12 -m venv .venv
 Copy-Item .env.example .env
 # 填写 .env，并将 BGE embedding/reranker 权重放入 models/
 npm --prefix frontend install
+.\.venv\Scripts\python.exe seed_real.py
+.\.venv\Scripts\python.exe data\build_local_kb.py
 powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 ```
+
+`bi_demo.db`、本地向量库和模型权重不提交到 Git。上面两条初始化命令必须在
+第一次启动前执行，否则深度健康检查会按设计拒绝启动“只有页面、没有数据”的演示。
+`seed_real.py` 生成的是确定性合成销量样例，仅用于验证 schema 和查询链路，不能
+作为市场结论或简历中的真实业务数据。
 
 默认地址：
 
@@ -171,16 +181,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-### 初始化演示数据
-
-零网络快速体验使用合成样例：
-
-```bash
-python seed_real.py
-python data/build_local_kb.py
-```
-
-`seed_real.py` 只保证 schema 和查询链路可演示，其中数值是确定性合成数据，不能作为市场结论或简历中的真实业务数据。
+### 更新真实销量数据
 
 真实销量数据使用公开 JSON API：
 

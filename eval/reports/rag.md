@@ -10,8 +10,8 @@
 - 负例拒答率：**100.0%**
 - reranker 全程启用：**True**
 - 后端披露：`local SQLite + NumPy evaluation backend; this is not the production PostgreSQL/pgvector backend`
-- Git：`53b4fa367aca0b086c0e7976284469ec19e810ba`，dirty=False
-- 种子 manifest：`35b29e2b740ad5924a96f6bc57bf4037fdbaec21fd0729f17580039e31cfa6bb`
+- Git：`efc3b544baf757d77bcbc63880fcb672682c7292`，dirty=False
+- 种子 manifest（SHA-256，LF canonical）：`a531706152ce4e75763eac773b8e6bcc8399354114248fe3b879038fcda4f555`
 
 ## 正例
 

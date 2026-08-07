@@ -74,8 +74,20 @@ def test_production_schema_covers_security_memory_and_public_rag():
 
 def test_frontend_production_default_is_same_origin():
     config = _text("frontend/src/api/config.js")
-    assert "import.meta.env.DEV ? 'http://localhost:8000' : ''" in config
+    assert "import.meta.env.DEV ? 'http://localhost:8001' : ''" in config
     assert "VITE_API_BASE || 'http://localhost:8000'" not in config
+
+
+def test_local_frontend_defaults_match_start_script():
+    start_script = _text("scripts/start-dev.ps1")
+    example = _text("frontend/.env.example")
+    readme = _text("README.md")
+
+    assert "[int]$BackendPort = 8001" in start_script
+    assert "VITE_API_BASE=http://localhost:8001" in example
+    assert "VITE_DATA_SOURCE=live" in example
+    assert readme.index("data\\build_local_kb.py") < readme.index("scripts\\start-dev.ps1")
+    assert "Stop-Process -Id $started.backend.pid" in start_script
 
 
 def test_api_image_contains_runtime_agent_configs():

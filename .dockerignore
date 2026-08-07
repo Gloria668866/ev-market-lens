@@ -7,7 +7,6 @@
 data/raw/
 data/rag_corpus/
 data/rag_samples/
-data/rag_eval/
 models/
 frontend/node_modules
 frontend/dist

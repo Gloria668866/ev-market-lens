@@ -2,9 +2,12 @@
 import { ENDPOINTS, IS_MOCK } from './config.js'
 import { authHeaders } from './auth.js'
 import pricesData from './prices.json'
+import { normalizePrices } from './mockData.js'
+
+const localPrices = normalizePrices(pricesData)
 
 function localQuery({ q = '', brand = '', sort = 'price', order = 'desc', limit = 80 }) {
-  let items = pricesData.items.slice()
+  let items = localPrices.slice()
   if (q) { const k = q.toLowerCase(); items = items.filter((x) => `${x.brand}${x.series}`.toLowerCase().includes(k)) }
   if (brand) items = items.filter((x) => x.brand === brand)
   const key = sort === 'brand' ? 'brand' : sort === 'series' ? 'series' : 'max'
@@ -24,7 +27,7 @@ export async function listPrices(params = {}) {
 }
 
 export async function priceBrands() {
-  if (IS_MOCK) return [...new Set(pricesData.items.map((x) => x.brand))].sort((a, b) => a.localeCompare(b, 'zh'))
+  if (IS_MOCK) return [...new Set(localPrices.map((x) => x.brand))].sort((a, b) => a.localeCompare(b, 'zh'))
   const r = await fetch(ENDPOINTS.priceBrands, { headers: { ...authHeaders() } })
   if (!r.ok) return []
   return (await r.json()).brands || []

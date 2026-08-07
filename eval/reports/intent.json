@@ -13,10 +13,10 @@
   "nlu_llm_calls_total": 0,
   "zero_llm_route_rate": 1.0,
   "latency_ms": {
-    "mean": 0.08,
-    "p50": 0.06,
-    "p95": 0.16,
-    "max": 0.89
+    "mean": 0.07,
+    "p50": 0.05,
+    "p95": 0.1,
+    "max": 0.79
   },
   "labels": [
     "sql",
@@ -118,11 +118,54 @@
   },
   "errors": [],
   "_meta": {
-    "timestamp": "2026-07-29T15:07:38.341656+00:00",
+    "timestamp": "2026-08-01T11:02:32.072896+00:00",
     "model": "deepseek-v4-flash",
-    "dataset_sha256": "e519008c1a46a6e1ab5e3dd727f69480eef494455120c912fca850a311b615f9",
-    "git_commit": "53b4fa367aca0b086c0e7976284469ec19e810ba",
-    "dirty_worktree": false,
-    "config_sha256": "40463ce4c6be1634d5fe1caf473e18c40e9cfa7c9df6728f50643f45ff022b8d"
+    "hash_semantics": "sha256-lf-v1",
+    "dataset_sha256": "cdf1e374d407cab93aecb0411127f1c2a713b5641c5ee36c1fec39696a498c71",
+    "implementation_manifest": [
+      {
+        "path": "app/config.py",
+        "bytes": 8371,
+        "sha256": "fdecfb7a586af3b0eec2f8b06ca1f9a52061d0635fe01e2f734f481e7929c991"
+      },
+      {
+        "path": "app/graph.py",
+        "bytes": 47427,
+        "sha256": "38c992de39150c0dbc5cad2bd9c403d5131c20d5424fcbaca97388ef425f1000"
+      },
+      {
+        "path": "app/llm.py",
+        "bytes": 5955,
+        "sha256": "d5e130a0d8697ca7dbbd1d84d68f21b18bfa566ca9e8642f9213851065f0f6df"
+      },
+      {
+        "path": "app/nlu.py",
+        "bytes": 27304,
+        "sha256": "092a5034e0b6ce46d543bfe8cbcd9c9adad31a13394084a5aa6654f5c168ad0b"
+      },
+      {
+        "path": "app/rag/embed.py",
+        "bytes": 5934,
+        "sha256": "39c9195bdf72cf6db3669a79363b6ef6aba6094b7751f439225716e4a93f77dc"
+      },
+      {
+        "path": "config/nlu.yaml",
+        "bytes": 7736,
+        "sha256": "fc35cb722bc4cebd114ac71f9cb1b8a306aadac9f49614d80fac7219bd59c8d8"
+      },
+      {
+        "path": "eval/common.py",
+        "bytes": 5818,
+        "sha256": "d801c5a478dfb0d98e712e7fae0c69f76db8607f6c3dda759d8d74738434f3ea"
+      },
+      {
+        "path": "eval/intent_eval.py",
+        "bytes": 9884,
+        "sha256": "6f8c8e9c6fa2f1f3ee82a909d356697bda8a24062abbe83280641e6fad571800"
+      }
+    ],
+    "implementation_sha256": "facb7cf6bf317bd3da047dbc4a0864c7ec6276360ad68bbd8d461bee4124f880",
+    "git_commit": "efc3b544baf757d77bcbc63880fcb672682c7292",
+    "dirty_worktree": false
   }
 }

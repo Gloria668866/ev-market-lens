@@ -4,8 +4,10 @@
 // data/build_local_kb.py 从真实语料库导出）做词法检索，命中真实原文段落、给真实引用，绝非写死。
 
 import corpus from './kb_corpus.json'
+import { normalizeCorpus } from './mockData.js'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const passages = normalizeCorpus(corpus)
 
 // 把一段文字按字切片，模拟逐 token 流式
 function tokenize(text) {
@@ -69,7 +71,7 @@ function _qTerms(q) {
 function ragRetrieve(q, k = 3) {
   const terms = _qTerms(q)
   if (!terms.length) return []
-  return corpus.passages
+  return passages
     .map((p) => {
       let s = 0
       for (const t of terms) if (p.text.includes(t)) s += t.length >= 2 ? 1 : 0.3
